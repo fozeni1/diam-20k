@@ -1,0 +1,37 @@
+{
+  "aircraft": "ДИАМ-20К",
+  "checked_on": "2026-10-27",
+  "source": "https://www.diam-aero.ru/bas_diam20k.html",
+  "published_characteristics": {
+    "configuration": "canard VTOL, combustion engine and four electric lift motors",
+    "max_takeoff_mass_kg": 30,
+    "wingspan_m": 4,
+    "length_m": 2,
+    "payload_range_kg": [3, 5],
+    "engine_displacement_cm3": 40,
+    "engine_power_hp_as_published": 3.7,
+    "lift_motor_count": 4,
+    "cruise_speed_m_s": [22, 24],
+    "max_speed_m_s": 40,
+    "max_range_km": 800,
+    "max_altitude_m_reference_unspecified": 2000,
+    "max_wind_m_s": 15,
+    "ambient_temperature_deg_c": [-30, 40]
+  },
+  "model_parameters": {
+    "payload_mass_kg": {"value": 0, "status": "user_selected_configuration", "needed": "Без полезной нагрузки; полная масса и заправка пока неизвестны"},
+    "mass_kg": {"value": null, "status": "unknown", "needed": "Фактическая масса с нагрузкой и топливом"},
+    "inertia_cg_kg_m2": {"value": null, "status": "unknown", "needed": "Симметричная матрица 3x3 в связанных осях относительно ЦМ"},
+    "cg_structural_m": {"value": null, "status": "unknown"},
+    "wing_area_m2": {"value": null, "status": "unknown"},
+    "mean_aerodynamic_chord_m": {"value": null, "status": "unknown"},
+    "propulsors_geometry": {"value": null, "status": "unknown"},
+    "thrust_and_torque_maps": {"value": null, "status": "unknown"},
+    "aerodynamic_coefficients": {"value": null, "status": "unknown"}
+  },
+  "notes": [
+    "Published maxima are not operating values and may not be attainable simultaneously.",
+    "Actual mass is not automatically set to maximum takeoff mass.",
+    "No numerical inertia, aerodynamic coefficients or propulsion geometry are assumed."
+  ]
+}
