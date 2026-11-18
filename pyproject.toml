@@ -4,10 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "diam20k"
-version = "0.1.0"
+version = "0.2.0"
 description = "Educational rigid-body flight dynamics for the DIAM-20K project"
 requires-python = ">=3.11"
 dependencies = ["numpy>=1.26,<3"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+diam20k = ["map_flight.html"]
