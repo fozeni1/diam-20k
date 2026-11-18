@@ -1,15 +1,4 @@
-"""Синтетическая карта для учебного симулятора DIAM-20K.
-
-Координаты (N, E, D) в метрах: север, восток, вниз. Земля на D = 0.
-
-Сохраните файл в src/diam20k/obstacle_map.py. Для проверки шага модели:
-
-    from diam20k.obstacle_map import DEMO_MAP
-
-    if not DEMO_MAP.is_segment_free(state[:3], next_state[:3]):
-        # Между состояниями отрезок пересёк препятствие или границу карты.
-        ...
-"""
+"""Геометрия учебного полигона в метрах NED. Земля находится на D = 0."""
 
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -45,7 +34,7 @@ class Box:
         object.__setattr__(self, "minimum_ned", minimum)
         object.__setattr__(self, "maximum_ned", maximum)
 
-    def _intersects_segment(self, start: PointNED, end: PointNED) -> bool:
+    def intersects_segment(self, start: PointNED, end: PointNED) -> bool:
         # Для каждой оси сужаем интервал параметра t отрезка start + t * (end - start).
         first, last = 0.0, 1.0
         for origin, target, low, high in zip(start, end, self.minimum_ned, self.maximum_ned):
@@ -71,6 +60,18 @@ class ObstacleMap:
     bounds: Box
     obstacles: tuple[Box, ...] = ()
 
+    def with_margin(self, metres: float) -> "ObstacleMap":
+        """Расширяет препятствия и сдвигает границы полигона внутрь."""
+        if not isfinite(metres) or metres < 0:
+            raise ValueError("Запас должен быть конечным и неотрицательным")
+
+        def expand(box, delta):
+            return Box(tuple(v - delta for v in box.minimum_ned),
+                       tuple(v + delta for v in box.maximum_ned))
+
+        return ObstacleMap(expand(self.bounds, -metres),
+                           tuple(expand(box, metres) for box in self.obstacles))
+
     def _inside_bounds(self, position: PointNED) -> bool:
         return all(
             low < coordinate < high
@@ -92,18 +93,30 @@ class ObstacleMap:
         end = _point_ned(end_ned)
         if not (self._inside_bounds(start) and self._inside_bounds(end)):
             return False
-        return not any(box._intersects_segment(start, end) for box in self.obstacles)
+        return not any(box.intersects_segment(start, end) for box in self.obstacles)
 
 
 DEMO_START_NED: PointNED = (0.0, 0.0, -20.0)
-DEMO_GOAL_NED: PointNED = (800.0, 0.0, -20.0)
+DEMO_GOAL_NED: PointNED = (4000.0, 0.0, -20.0)
 
 DEMO_MAP = ObstacleMap(
-    bounds=Box((-100.0, -250.0, -120.0), (900.0, 450.0, 0.0)),
+    bounds=Box((-200, -600, -180), (4200, 600, 0)),
     obstacles=(
-        Box((180.0, -45.0, -36.0), (250.0, 60.0, 0.0)),
-        Box((380.0, 110.0, -54.0), (460.0, 200.0, 0.0)),
-        Box((540.0, -145.0, -28.0), (630.0, -55.0, 0.0)),
-        Box((670.0, 65.0, -45.0), (740.0, 155.0, 0.0)),
+        Box((350, -280, -155), (440, 55, 0)),
+        Box((820, -55, -155), (910, 320, 0)),
+        Box((1290, -260, -42), (1380, 260, 0)),
+        Box((1760, -320, -155), (1850, 65, 0)),
+        Box((2230, -70, -150), (2320, 300, 0)),
+        Box((2700, -290, -52), (2790, 280, 0)),
+        Box((3170, -310, -155), (3260, 60, 0)),
+        Box((3640, -65, -160), (3730, 320, 0)),
+        Box((370, 340, -48), (460, 430, 0)),
+        Box((800, -400, -56), (890, -310, 0)),
+        Box((1300, 355, -34), (1370, 420, 0)),
+        Box((1745, 350, -72), (1825, 450, 0)),
+        Box((2240, -415, -69), (2330, -330, 0)),
+        Box((2690, 380, -38), (2770, 470, 0)),
+        Box((3180, 330, -45), (3270, 430, 0)),
+        Box((3650, -390, -60), (3730, -295, 0)),
     ),
 )

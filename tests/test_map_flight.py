@@ -3,8 +3,9 @@ from unittest.mock import patch
 
 import numpy as np
 
+from diam20k.course import plan_course
 from diam20k.geography import MapOrigin
-from diam20k.map_flight import simulate_demo
+from diam20k.map_flight import flight_summary, simulate_demo
 from diam20k.obstacle_map import Box, DEMO_GOAL_NED, DEMO_MAP, DEMO_START_NED, ObstacleMap
 
 
@@ -18,24 +19,73 @@ class MapFlightTests(unittest.TestCase):
         self.assertEqual(height, 170)
         np.testing.assert_allclose(origin.to_ned(latitude, longitude, height), ned, atol=1e-8)
 
-    def test_demo_climbs_over_obstacle_and_reaches_goal(self):
-        self.assertFalse(DEMO_MAP.is_segment_free(DEMO_START_NED, DEMO_GOAL_NED))
-        samples = simulate_demo()["samples"]
-        start, finish = samples[0], samples[-1]
-        self.assertEqual(start["time"], 0)
-        self.assertEqual(finish["time"], 40)
-        np.testing.assert_allclose(start["ned"], DEMO_START_NED, atol=1e-8)
-        np.testing.assert_allclose(finish["ned"], DEMO_GOAL_NED, atol=1e-6)
-        self.assertAlmostEqual(min(row["ned"][2] for row in samples), -80, places=6)
-        self.assertLess(samples[200]["attitude"][2][0], -0.2)
-        self.assertGreater(samples[600]["attitude"][2][0], 0.2)
-        for start, finish in zip(samples, samples[1:]):
-            self.assertTrue(DEMO_MAP.is_segment_free(start["ned"], finish["ned"]))
+    def test_eight_obstacles_in_wind_and_calm(self):
+        windy = simulate_demo()
+        calm = simulate_demo(wind=False)
+        safe = DEMO_MAP.with_margin(3)
+        for replay in (windy, calm):
+            self.assertEqual(replay["status"], "Маршрут завершён")
+            self.assertEqual(replay["summary"]["passed"], 8)
+            self.assertEqual(replay["summary"]["total"], 8)
+            self.assertEqual(replay["summary"]["duration_s"], 200)
+            self.assertGreater(replay["summary"]["distance_m"], 4000)
+            self.assertEqual(len(replay["blockers"]), 8)
+            rows = replay["samples"]
+            self.assertEqual(rows[-1]["time"], 200)
+            np.testing.assert_allclose(rows[-1]["ned"], DEMO_GOAL_NED, atol=0.01)
+            for a, b in zip(rows, rows[1:]):
+                self.assertTrue(safe.is_segment_free(a["ned"], b["ned"]))
+            passes = []
+            for i in replay["blockers"]:
+                box = DEMO_MAP.obstacles[i]
+                self.assertTrue(box.intersects_segment(DEMO_START_NED, DEMO_GOAL_NED))
+                inside = [r["ned"] for r in rows
+                          if box.minimum_ned[0] <= r["ned"][0] <= box.maximum_ned[0]]
+                self.assertTrue(inside)
+                if all(p[1] > box.maximum_ned[1] for p in inside):
+                    passes.append("east")
+                elif all(p[1] < box.minimum_ned[1] for p in inside):
+                    passes.append("west")
+                elif all(box.minimum_ned[1] <= p[1] <= box.maximum_ned[1]
+                         and p[2] < box.minimum_ned[2] for p in inside):
+                    passes.append("above")
+                else:
+                    self.fail(f"Не удалось определить проход объекта {i}")
+            self.assertEqual(passes, ["east", "west", "above", "east",
+                                      "west", "above", "east", "west"])
+        self.assertGreater(windy["samples"][800]["ned"][1] - calm["samples"][800]["ned"][1], 20)
+        self.assertTrue(all(r["wind_east"] == 0 for r in calm["samples"]))
 
-    def test_collision_keeps_last_safe_sample(self):
-        # At 20 m/s the first simulated step spans this thin obstacle.
-        wall = Box((0.4, -5, -60), (0.6, 5, 0))
-        with patch("diam20k.map_flight.DEMO_MAP", ObstacleMap(DEMO_MAP.bounds, (wall,))):
+    def test_course_changes_when_obstacle_moves(self):
+        for low, high, sign in [(-280, 55, 1), (-55, 280, -1)]:
+            world = ObstacleMap(DEMO_MAP.bounds, (Box((350, low, -155), (440, high, 0)),))
+            route = plan_course(world, DEMO_START_NED, DEMO_GOAL_NED)
+            offset, _, _ = route.motion(400, 20)
+            self.assertGreater(sign * offset[0], 55)
+
+    def test_blocked_course_reports_failure(self):
+        wall = Box((200, -600, -180), (210, 600, 0))
+        with self.assertRaisesRegex(ValueError, "Не найден свободный проход"):
+            plan_course(ObstacleMap(DEMO_MAP.bounds, (wall,)), DEMO_START_NED, DEMO_GOAL_NED)
+
+    def test_unexpected_wall_stops_replay(self):
+        empty = ObstacleMap(DEMO_MAP.bounds)
+        route = plan_course(empty, DEMO_START_NED, DEMO_GOAL_NED)
+        wall = Box((10.4, -5, -60), (10.6, 5, 0))
+        with patch("diam20k.map_flight.plan_course", return_value=route), \
+                patch("diam20k.map_flight.DEMO_MAP", ObstacleMap(empty.bounds, (wall,))):
             replay = simulate_demo()
         self.assertIn("Полёт прерван", replay["status"])
-        self.assertEqual(len(replay["samples"]), 1)
+        self.assertAlmostEqual(replay["samples"][-1]["ned"][0], 7.0)
+        summary = replay["summary"]
+        self.assertEqual((summary["passed"], summary["total"]), (0, 1))
+        self.assertAlmostEqual(summary["duration_s"], 0.35)
+        self.assertAlmostEqual(summary["distance_m"], 7.0)
+        self.assertAlmostEqual(summary["closest_sample_m"], 3.4)
+
+    def test_single_frame_and_empty_map(self):
+        summary = flight_summary([{"time": 0, "ned": DEMO_START_NED}],
+                                 ObstacleMap(DEMO_MAP.bounds), [])
+        self.assertEqual(summary["distance_m"], 0)
+        self.assertEqual(summary["duration_s"], 0)
+        self.assertIsNone(summary["closest_sample_m"])

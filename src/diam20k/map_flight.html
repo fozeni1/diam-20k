@@ -17,6 +17,9 @@
   dl div { background: #16252c; border-radius: 6px; padding: 10px; }
   dt { color: #b0c7cb; font-size: .83rem; }
   dd { margin: 4px 0 0; font-variant-numeric: tabular-nums; }
+  details { margin: 14px 0; padding: 12px; border: 1px solid #526c75; border-radius: 6px; }
+  summary { cursor: pointer; font-weight: 600; }
+  details p { margin: 12px 0 0; }
 </style>
 <main>
   <h1>ДИАМ‑20К · Полёт над картой</h1>
@@ -28,8 +31,12 @@
     <input id="seek" type="range" min="0" step="1" value="0" aria-label="Позиция воспроизведения">
     <output id="time" for="seek"></output>
   </div>
+  <details id="results">
+    <summary>Итоги полёта</summary>
+    <p id="outcome"></p>
+    <dl id="metrics"></dl>
+  </details>
   <dl id="telemetry"></dl>
-  <p id="status" role="status"></p>
 </main>
 <script>
 'use strict';
@@ -40,19 +47,31 @@ const play = document.querySelector('#play');
 const view = document.querySelector('#view');
 const seek = document.querySelector('#seek');
 const time = document.querySelector('#time');
-const status = document.querySelector('#status');
+const results = document.querySelector('#results');
 const telemetry = document.querySelector('#telemetry');
 const fields = ['Широта WGS 84', 'Долгота WGS 84', 'Высота над картой',
-  'Высота WGS 84', 'Горизонтальная скорость', 'Скорость набора', 'Курс корпуса', 'Тангаж', 'Крен'];
-const cells = fields.map(label => {
+  'Высота WGS 84', 'Горизонтальная скорость', 'Скорость набора', 'Курс корпуса', 'Тангаж', 'Крен', 'Боковой ветер', 'Пройдено препятствий на пути'];
+function metric(parent, label) {
   const group = document.createElement('div');
   const term = document.createElement('dt');
   const value = document.createElement('dd');
   term.textContent = label;
   group.append(term, value);
-  telemetry.append(group);
+  parent.append(group);
   return value;
-});
+}
+const cells = fields.map(label => metric(telemetry, label));
+const report = data.summary;
+const format = new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 2});
+document.querySelector('#outcome').textContent = data.status;
+const metrics = document.querySelector('#metrics');
+for (const [label, value] of [
+  ['Время в полёте', format.format(report.duration_s) + ' с'],
+  ['Длина траектории', format.format(report.distance_m) + ' м'],
+  ['Пройдено препятствий на пути', report.passed + ' из ' + report.total],
+  ['Минимальное расстояние от центра до препятствия по кадрам',
+    report.closest_sample_m === null ? 'На карте нет препятствий' : format.format(report.closest_sample_m) + ' м'],
+]) metric(metrics, label).textContent = value;
 
 const samples = data.samples;
 const last = samples.length - 1;
@@ -61,6 +80,7 @@ seek.max = last;
 let topView = false;
 let playing = false;
 let position = 0;
+let atEnd = false;
 let startedAt = 0;
 
 function footprint(box, down) {
@@ -70,7 +90,7 @@ function footprint(box, down) {
 }
 
 function plane([north, east, down]) {
-  return topView ? [east, -north] : [east + .43 * north, .38 * east - .63 * north + down];
+  return topView ? [north, east] : [east + .43 * north, .38 * east - .63 * north + down];
 }
 
 function draw() {
@@ -134,7 +154,8 @@ function draw() {
     ctx.fillStyle = '#fff4de';
     ctx.font = '12px system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText(`${-center[2]} м`, x, y + 4);
+    const order = data.blockers.indexOf(data.obstacles.indexOf(box));
+    if (order >= 0) ctx.fillText(`№${order + 1} · ${-center[2]} м`, x, y + 4);
   }
 
   const sample = samples[position];
@@ -181,11 +202,15 @@ function update() {
   const roll = degrees(Math.atan2(attitude[2][1], attitude[2][2]));
   const values = [`${lat.toFixed(6)}°`, `${lon.toFixed(6)}°`, `${(-ned[2]).toFixed(1)} м`,
     `${height.toFixed(1)} м`, `${Math.hypot(vn, ve).toFixed(1)} м/с`,
-    `${(-vd).toFixed(1)} м/с`, ...[heading, pitch, roll].map(angle => `${angle.toFixed(1)}°`)];
+    `${(-vd).toFixed(1)} м/с`, ...[heading, pitch, roll].map(angle => `${angle.toFixed(1)}°`),
+    samples[position].wind_east === 0 ? 'Штиль' :
+      Math.abs(samples[position].wind_east).toFixed(1) + ' м/с на ' + (samples[position].wind_east > 0 ? 'восток' : 'запад'),
+    data.blockers.filter(i => ned[0] > data.obstacles[i].maximum_ned[0]).length + ' / ' + data.blockers.length];
   cells.forEach((cell, i) => { cell.textContent = values[i]; });
   time.value = `${t.toFixed(1)} / ${duration.toFixed(1)} с`;
-  const message = position === last ? data.status : '';
-  if (status.textContent !== message) status.textContent = message;
+  if (position === last && !atEnd) results.open = true;
+  if (position < last && atEnd) results.open = false;
+  atEnd = position === last;
   draw();
 }
 
