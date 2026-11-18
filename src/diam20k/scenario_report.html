@@ -1,0 +1,879 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ДИАМ‑20К · Сценарии полёта</title>
+<style>
+/*
+ * Цвета заданы ролями, а не значениями: разметка и скрипт обращаются только
+ * к переменным, поэтому тёмная тема меняет один блок и ничего больше.
+ * Цвета рядов проверены на различимость при нарушениях цветового зрения
+ * отдельно для светлого и тёмного фона.
+ */
+:root
+{
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-secondary: #52514e;
+    --ink-muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    font: 16px system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark)
+{
+    :root
+    {
+        color-scheme: dark;
+        --page: #0d0d0d;
+        --surface: #1a1a19;
+        --ink: #f0efec;
+        --ink-secondary: #c3c2b7;
+        --ink-muted: #898781;
+        --grid: #2c2c2a;
+        --axis: #383835;
+        --border: rgba(255, 255, 255, 0.10);
+        --series-1: #3987e5;
+        --series-2: #d95926;
+        --series-3: #199e70;
+    }
+}
+
+body
+{
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+}
+
+.report
+{
+    max-width: 1180px;
+    margin: auto;
+    padding: 28px 24px 48px;
+}
+
+h1
+{
+    margin: 0 0 6px;
+    font-size: 1.6rem;
+}
+
+.lead,
+#description
+{
+    margin: 0 0 18px;
+    color: var(--ink-secondary);
+}
+
+#description
+{
+    max-width: 78ch;
+}
+
+/* Выбор сценария стоит одной строкой над всем, что от него зависит. */
+#tabs
+{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 14px;
+}
+
+button
+{
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+button[aria-selected="true"]
+{
+    border-color: var(--ink);
+    font-weight: 600;
+}
+
+#tiles
+{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin: 0 0 16px;
+}
+
+#tiles div,
+.card
+{
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface);
+}
+
+#tiles div
+{
+    padding: 12px 14px;
+}
+
+#tiles dt
+{
+    color: var(--ink-secondary);
+    font-size: 0.85rem;
+}
+
+#tiles dd
+{
+    margin: 4px 0 0;
+    font-size: 1.35rem;
+    font-weight: 600;
+}
+
+#tiles small
+{
+    color: var(--ink-secondary);
+    font-size: 0.85rem;
+    font-weight: 400;
+}
+
+.controls
+{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin: 0 0 16px;
+}
+
+.controls input
+{
+    flex: 1 1 200px;
+    accent-color: var(--series-1);
+}
+
+.controls output
+{
+    min-width: 9ch;
+    color: var(--ink-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+#charts
+{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 430px), 1fr));
+    gap: 14px;
+}
+
+.card
+{
+    min-width: 0;
+    padding: 14px 14px 8px;
+}
+
+.card h2
+{
+    margin: 0;
+    font-size: 1rem;
+}
+
+.card h2 small,
+.note
+{
+    color: var(--ink-secondary);
+    font-size: 0.85rem;
+    font-weight: 400;
+}
+
+.note
+{
+    margin: 2px 0 0;
+}
+
+/*
+ * Легенда одновременно служит табло значений под курсором. Имя ряда набрано
+ * цветом текста, а не цветом линии: светлые оттенки на светлом фоне не читаются.
+ */
+.legend
+{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 18px;
+    margin: 8px 0 4px;
+    padding: 0;
+    list-style: none;
+    font-size: 0.85rem;
+    color: var(--ink-secondary);
+}
+
+.legend li
+{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.legend i
+{
+    width: 14px;
+    height: 2px;
+    border-radius: 1px;
+}
+
+.legend b
+{
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+}
+
+svg
+{
+    display: block;
+    touch-action: pan-y;
+}
+
+svg text
+{
+    fill: var(--ink-muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+}
+
+.grid
+{
+    stroke: var(--grid);
+}
+
+.axis,
+.cursor
+{
+    stroke: var(--axis);
+}
+
+.cursor
+{
+    stroke: var(--ink-muted);
+}
+
+.line
+{
+    fill: none;
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+/* Кольцо цвета фона отделяет точку от линии, которую она пересекает. */
+.dot
+{
+    stroke: var(--surface);
+    stroke-width: 2;
+}
+
+details
+{
+    margin: 16px 0 0;
+}
+
+summary
+{
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.scroll
+{
+    overflow-x: auto;
+    margin: 10px 0 0;
+}
+
+table
+{
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+}
+
+th,
+td
+{
+    padding: 4px 10px;
+    border-bottom: 1px solid var(--grid);
+    text-align: right;
+    white-space: nowrap;
+}
+
+th
+{
+    color: var(--ink-secondary);
+    font-weight: 600;
+    vertical-align: bottom;
+    white-space: normal;
+    min-width: 8ch;
+}
+</style>
+<main class="report">
+    <h1>ДИАМ‑20К · Сценарии полёта</h1>
+    <p class="lead">
+        Расчёт механического ядра 6‑DOF на проверочном теле. Это не характеристики ДИАМ‑20К.
+    </p>
+    <nav id="tabs" role="tablist" aria-label="Сценарий"></nav>
+    <p id="description"></p>
+    <dl id="tiles"></dl>
+    <div class="controls">
+        <button id="play" type="button">Пуск</button>
+        <input id="seek" type="range" min="0" step="1" value="0" aria-label="Момент времени">
+        <output id="clock" for="seek"></output>
+    </div>
+    <section id="charts"></section>
+    <details>
+        <summary>Таблица значений</summary>
+        <div class="scroll">
+            <table id="table"></table>
+        </div>
+    </details>
+</main>
+<script>
+'use strict';
+
+/*
+ * Страница получает готовые ряды и подписи из scenario_report.py и только рисует их.
+ * Здесь нет ни одной формулы механики: если график показывает не то, ошибку
+ * нужно искать в Python, а не в этом файле.
+ */
+const report = /* REPORT_DATA */;
+
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// Поля графика в пикселях. Левое поле рассчитано на подпись вида «−1 000,5».
+const PLOT = {height: 210, left: 58, right: 22, top: 10, bottom: 26};
+
+// Любой сценарий проигрывается за одно и то же время: зрителю важна форма
+// кривых, а не ожидание тридцати секунд реального полёта.
+const PLAYBACK_MS = 8000;
+
+// Столько строк таблицы читается без прокрутки по вертикали.
+const TABLE_ROWS = 30;
+
+const SUPERSCRIPT =
+{
+    '-': '⁻', 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴',
+    5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹'
+};
+
+const tabs = document.querySelector('#tabs');
+const description = document.querySelector('#description');
+const tiles = document.querySelector('#tiles');
+const play = document.querySelector('#play');
+const seek = document.querySelector('#seek');
+const clock = document.querySelector('#clock');
+const charts = document.querySelector('#charts');
+const table = document.querySelector('#table');
+
+// Всё изменяемое состояние страницы собрано в одном месте.
+const state =
+{
+    scenario: null,   // Данные выбранного сценария.
+    views: [],        // Нарисованные графики выбранного сценария.
+    index: 0,         // Номер отсчёта под курсором, общий для всех графиков.
+    playing: false,
+    startedAt: 0,     // Отметка времени, от которой отсчитывается проигрывание.
+    frame: 0          // Идентификатор запрошенного кадра анимации.
+};
+
+/* ---------- Вспомогательные функции ---------- */
+
+/*
+ * Создаёт элемент HTML. Текст задаётся через textContent, а не через innerHTML:
+ * подписи приходят из данных, и разметка в них не должна исполняться.
+ */
+function element(tag, text, parent)
+{
+    const node = document.createElement(tag);
+    if (text !== undefined)
+    {
+        node.textContent = text;
+    }
+    if (parent)
+    {
+        parent.append(node);
+    }
+    return node;
+}
+
+function svgElement(tag, attributes, parent)
+{
+    const node = document.createElementNS(SVG_NS, tag);
+    for (const [name, value] of Object.entries(attributes))
+    {
+        node.setAttribute(name, value);
+    }
+    parent.append(node);
+    return node;
+}
+
+/*
+ * Число с десятичной запятой и заданным числом знаков после неё.
+ * Значения, которые округляются до нуля, печатаются без знака: «−0,000» в табло
+ * выглядит как ошибка, хотя это шум округления.
+ */
+function formatFixed(value, digits)
+{
+    const rounded = Number(value.toFixed(digits));
+    const options = {minimumFractionDigits: digits, maximumFractionDigits: digits};
+    return (rounded === 0 ? 0 : rounded).toLocaleString('ru-RU', options).replace('-', '−');
+}
+
+/* Малое число в виде «1,5·10⁻¹⁰»: обычная запись показала бы только нули. */
+function formatPower(value)
+{
+    if (value === 0)
+    {
+        return '0';
+    }
+    let exponent = Math.floor(Math.log10(value));
+    let mantissa = Math.round(value / 10 ** exponent * 10) / 10;
+    if (mantissa >= 10)
+    {
+        // Округление 9,96 дало 10,0: переносим разряд в показатель степени.
+        mantissa = 1;
+        exponent += 1;
+    }
+    const power = '10' + [...String(exponent)].map(sign => SUPERSCRIPT[sign]).join('');
+    return mantissa === 1 ? power : formatFixed(mantissa, 1) + '·' + power;
+}
+
+/* Значение под курсором в том виде, который подходит шкале графика. */
+function formatValue(value, chart)
+{
+    if (chart.scale !== 'log')
+    {
+        return formatFixed(value, 3);
+    }
+    // Ряд логарифмического графика ограничен снизу в Python; честно показываем это.
+    return value <= chart.floor ? '≤ ' + formatPower(chart.floor) : formatPower(value);
+}
+
+/* «Круглый» шаг делений: 1, 2 или 5, умноженные на степень десяти. */
+function niceStep(span, intervals)
+{
+    const raw = span / intervals;
+    const magnitude = 10 ** Math.floor(Math.log10(raw));
+    for (const factor of [1, 2, 5])
+    {
+        if (factor * magnitude >= raw * (1 - 1e-9))
+        {
+            return factor * magnitude;
+        }
+    }
+    return 10 * magnitude;
+}
+
+/* Номер отсчёта, ближайшего к моменту времени. Сетка упорядочена: ищем делением пополам. */
+function nearestIndex(time, moment)
+{
+    let low = 0;
+    let high = time.length - 1;
+    while (high - low > 1)
+    {
+        const middle = (low + high) >> 1;
+        if (time[middle] < moment)
+        {
+            low = middle;
+        }
+        else
+        {
+            high = middle;
+        }
+    }
+    return moment - time[low] <= time[high] - moment ? low : high;
+}
+
+/* ---------- Шкалы ---------- */
+
+/*
+ * Линейная шкала. Границы расширяются до круглых делений. Размах не бывает
+ * меньше chart.min_span: иначе постоянный ряд растянулся бы на всю высоту
+ * и шум порядка 1e-13 выглядел бы как колебания.
+ */
+function linearScale(chart)
+{
+    const values = chart.series.flatMap(series => series.values);
+    let low = Math.min(...values);
+    let high = Math.max(...values);
+    if (high - low < chart.min_span)
+    {
+        const middle = (low + high) / 2;
+        low = middle - chart.min_span / 2;
+        high = middle + chart.min_span / 2;
+    }
+    const step = niceStep(high - low, 4);
+    low = Math.floor(low / step + 1e-9) * step;
+    high = Math.ceil(high / step - 1e-9) * step;
+
+    const ticks = [];
+    for (let position = 0; low + position * step <= high + step * 1e-9; position++)
+    {
+        ticks.push(low + position * step);
+    }
+    const digits = Math.min(6, Math.max(0, -Math.floor(Math.log10(step) + 1e-9)));
+    const scale =
+    {
+        low, high, ticks,
+        position: value => (value - low) / (high - low),
+        label: value => formatFixed(value, digits)
+    };
+    return scale;
+}
+
+/*
+ * Логарифмическая шкала для отклонений: они занимают много порядков величины,
+ * и на линейной оси всё, кроме наибольшего, слилось бы с нулём.
+ */
+function logScale(chart)
+{
+    const values = chart.series.flatMap(series => series.values);
+    let low = Math.floor(Math.log10(Math.min(...values)) + 1e-9);
+    let high = Math.ceil(Math.log10(Math.max(...values)) - 1e-9);
+    if (high - low < 2)
+    {
+        // Меньше двух порядков: добавляем по порядку, чтобы у оси было хотя бы три деления.
+        low -= 1;
+        high += 1;
+    }
+    const step = Math.ceil((high - low) / 4);
+    high = low + Math.ceil((high - low) / step) * step;
+
+    const ticks = [];
+    for (let exponent = low; exponent <= high; exponent += step)
+    {
+        ticks.push(10 ** exponent);
+    }
+    const scale =
+    {
+        low, high, ticks,
+        position: value => (Math.log10(value) - low) / (high - low),
+        label: formatPower
+    };
+    return scale;
+}
+
+/* ---------- График ---------- */
+
+/*
+ * Строит карточку графика и возвращает её «вид»: данные, шкалу и ссылки на
+ * элементы, которые меняются при движении курсора. Сама кривая рисуется
+ * в drawChart, потому что зависит от ширины карточки.
+ */
+function createChart(chart, time)
+{
+    const card = element('article', undefined, charts);
+    card.className = 'card';
+    const heading = element('h2', chart.title, card);
+    element('small', ', ' + chart.unit, heading);
+    if (chart.note)
+    {
+        element('p', chart.note, card).className = 'note';
+    }
+
+    // Табло значений. Для одного ряда имя не повторяется: его уже называет заголовок.
+    const legend = element('ul', undefined, card);
+    legend.className = 'legend';
+    const cells = chart.series.map((series, order) =>
+    {
+        const item = element('li', undefined, legend);
+        if (chart.series.length > 1)
+        {
+            element('i', undefined, item).style.background = `var(--series-${order + 1})`;
+            element('span', series.label, item);
+        }
+        return element('b', undefined, item);
+    });
+
+    const svg = svgElement('svg', {role: 'img', height: PLOT.height}, card);
+    const names = chart.series.map(series => series.label).join(', ');
+    svg.setAttribute('aria-label', `${chart.title}: ${names}`);
+
+    const view =
+    {
+        chart, time, cells, svg,
+        scale: chart.scale === 'log' ? logScale(chart) : linearScale(chart),
+        cursor: null,
+        dots: [],
+        x: null,
+        y: null
+    };
+
+    // Курсор ищет момент времени, а не линию: попадать в кривую толщиной 2 пикселя не нужно.
+    svg.addEventListener('pointermove', event =>
+    {
+        const bounds = svg.getBoundingClientRect();
+        const plotWidth = bounds.width - PLOT.left - PLOT.right;
+        const share = (event.clientX - bounds.left - PLOT.left) / plotWidth;
+        const duration = time[time.length - 1] - time[0];
+        stopPlayback();
+        // За краями графика курсор останавливается на первом или последнем отсчёте.
+        setIndex(nearestIndex(time, time[0] + Math.min(1, Math.max(0, share)) * duration));
+    });
+    return view;
+}
+
+/* Рисует оси, сетку и кривые под заданную ширину. Вызывается заново при изменении окна. */
+function drawChart(view, width)
+{
+    const {chart, time, scale, svg} = view;
+    const plotWidth = width - PLOT.left - PLOT.right;
+    const plotHeight = PLOT.height - PLOT.top - PLOT.bottom;
+    const bottom = PLOT.top + plotHeight;
+    const right = width - PLOT.right;
+    const start = time[0];
+    const duration = time[time.length - 1] - start;
+
+    view.x = moment => PLOT.left + (moment - start) / duration * plotWidth;
+    view.y = value => bottom - scale.position(value) * plotHeight;
+
+    svg.replaceChildren();
+    svg.setAttribute('width', width);
+    svg.setAttribute('viewBox', `0 0 ${width} ${PLOT.height}`);
+
+    // Горизонтальная сетка и подписи значений.
+    for (const tick of scale.ticks)
+    {
+        const level = view.y(tick);
+        svgElement('line', {class: 'grid', x1: PLOT.left, x2: right, y1: level, y2: level}, svg);
+        const anchor = {x: PLOT.left - 8, y: level + 4, 'text-anchor': 'end'};
+        svgElement('text', anchor, svg).textContent = scale.label(tick);
+    }
+
+    // Нулевой уровень выделен, только если он внутри графика: по нему читается знак величины.
+    if (chart.scale !== 'log' && scale.low < 0 && scale.high > 0)
+    {
+        const zero = view.y(0);
+        svgElement('line', {class: 'axis', x1: PLOT.left, x2: right, y1: zero, y2: zero}, svg);
+    }
+    svgElement('line', {class: 'axis', x1: PLOT.left, x2: right, y1: bottom, y2: bottom}, svg);
+
+    // Деления времени. Единица указана один раз, у последнего деления.
+    const timeStep = niceStep(duration, Math.max(2, Math.floor(plotWidth / 90)));
+    const end = start + duration + timeStep * 1e-9;   // Допуск на округление при сложении шагов.
+    const first = Math.ceil(start / timeStep - 1e-9) * timeStep;
+    for (let moment = first; moment <= end; moment += timeStep)
+    {
+        const anchor = {x: view.x(moment), y: bottom + 17, 'text-anchor': 'middle'};
+        const isLast = moment + timeStep > end;
+        const text = formatFixed(moment, timeStep < 1 ? 1 : 0) + (isLast ? ' с' : '');
+        svgElement('text', anchor, svg).textContent = text;
+    }
+
+    // Кривые. Первый ряд рисуется последним, чтобы оказаться сверху при совпадении линий.
+    for (let order = chart.series.length - 1; order >= 0; order--)
+    {
+        const points = chart.series[order].values.map((value, index) =>
+            `${view.x(time[index]).toFixed(1)},${view.y(value).toFixed(1)}`);
+        const line = svgElement('path', {class: 'line', d: 'M' + points.join('L')}, svg);
+        line.style.stroke = `var(--series-${order + 1})`;
+    }
+
+    // Курсор и точки на кривых создаются один раз; при движении меняются только координаты.
+    view.cursor = svgElement('line', {class: 'cursor', y1: PLOT.top, y2: bottom}, svg);
+    view.dots = chart.series.map((series, order) =>
+    {
+        const dot = svgElement('circle', {class: 'dot', r: 5}, svg);
+        dot.style.fill = `var(--series-${order + 1})`;
+        return dot;
+    });
+    updateChart(view, state.index);
+}
+
+/* Переносит курсор графика на отсчёт index и обновляет табло значений. */
+function updateChart(view, index)
+{
+    const position = view.x(view.time[index]);
+    view.cursor.setAttribute('x1', position);
+    view.cursor.setAttribute('x2', position);
+    view.chart.series.forEach((series, order) =>
+    {
+        view.dots[order].setAttribute('cx', position);
+        view.dots[order].setAttribute('cy', view.y(series.values[index]));
+        view.cells[order].textContent = formatValue(series.values[index], view.chart);
+    });
+}
+
+/* Перерисовывает все графики под текущую ширину карточек. */
+function drawAll()
+{
+    for (const view of state.views)
+    {
+        drawChart(view, view.svg.parentElement.clientWidth - 28);
+    }
+}
+
+/* ---------- Курсор времени и проигрывание ---------- */
+
+/* Единственное место, где меняется положение курсора: ползунок, часы и графики не расходятся. */
+function setIndex(index)
+{
+    state.index = index;
+    seek.value = index;
+    clock.textContent = formatFixed(state.scenario.time[index], 2) + ' с';
+    for (const view of state.views)
+    {
+        updateChart(view, index);
+    }
+}
+
+function stopPlayback()
+{
+    cancelAnimationFrame(state.frame);
+    state.playing = false;
+    play.textContent = 'Пуск';
+}
+
+/*
+ * Кадр проигрывания. Положение курсора вычисляется из прошедшего времени,
+ * а не увеличивается на шаг за кадр: скорость не зависит от частоты экрана.
+ */
+function playbackFrame(now)
+{
+    const time = state.scenario.time;
+    const share = Math.min(1, (now - state.startedAt) / PLAYBACK_MS);
+    setIndex(nearestIndex(time, time[0] + share * (time[time.length - 1] - time[0])));
+    if (share < 1)
+    {
+        state.frame = requestAnimationFrame(playbackFrame);
+    }
+    else
+    {
+        stopPlayback();
+    }
+}
+
+play.addEventListener('click', () =>
+{
+    if (state.playing)
+    {
+        stopPlayback();
+        return;
+    }
+    const last = state.scenario.time.length - 1;
+    // С конца проигрывание начинается заново, с середины продолжается с того же места.
+    const share = state.index >= last ? 0 : state.index / last;
+    state.startedAt = performance.now() - share * PLAYBACK_MS;
+    state.playing = true;
+    play.textContent = 'Пауза';
+    state.frame = requestAnimationFrame(playbackFrame);
+});
+
+seek.addEventListener('input', () =>
+{
+    stopPlayback();
+    setIndex(Number(seek.value));
+});
+
+/* ---------- Сценарий: итоги, графики, таблица ---------- */
+
+function showTiles(scenario)
+{
+    tiles.replaceChildren();
+    for (const tile of scenario.tiles)
+    {
+        const group = element('div', undefined, tiles);
+        element('dt', tile.label, group);
+        const text = tile.format === 'power' ? formatPower(tile.value) : formatFixed(tile.value, 2);
+        element('small', ' ' + tile.unit, element('dd', text, group));
+    }
+}
+
+/*
+ * Таблица повторяет графики числами. Она нужна тем, кому график недоступен
+ * или неудобен, и тем, кто хочет переписать значение, а не оценивать его по сетке.
+ */
+function showTable(scenario)
+{
+    table.replaceChildren();
+    const head = element('tr', undefined, element('thead', undefined, table));
+    element('th', 'Время, с', head);
+    for (const chart of scenario.charts)
+    {
+        for (const series of chart.series)
+        {
+            const name = chart.series.length > 1 ? `${chart.title}: ${series.label}` : chart.title;
+            element('th', `${name}, ${chart.unit}`, head);
+        }
+    }
+
+    const body = element('tbody', undefined, table);
+    const last = scenario.time.length - 1;
+    const stride = Math.max(1, Math.ceil(last / TABLE_ROWS));
+    for (let index = 0; index <= last; index += stride)
+    {
+        // Последняя строка всегда соответствует концу сценария, даже если шаг на него не попадает.
+        const row = index + stride > last ? last : index;
+        const line = element('tr', undefined, body);
+        element('td', formatFixed(scenario.time[row], 2), line);
+        for (const chart of scenario.charts)
+        {
+            for (const series of chart.series)
+            {
+                element('td', formatValue(series.values[row], chart), line);
+            }
+        }
+        if (row === last)
+        {
+            break;
+        }
+    }
+}
+
+function selectScenario(scenario)
+{
+    stopPlayback();
+    state.scenario = scenario;
+    for (const tab of tabs.children)
+    {
+        tab.setAttribute('aria-selected', String(tab.dataset.name === scenario.name));
+    }
+    description.textContent = scenario.description;
+    showTiles(scenario);
+    showTable(scenario);
+
+    charts.replaceChildren();
+    state.views = scenario.charts.map(chart => createChart(chart, scenario.time));
+    seek.max = scenario.time.length - 1;
+    // Курсор стоит в конце: без единого движения мыши табло показывает итог сценария.
+    state.index = scenario.time.length - 1;
+    drawAll();
+    setIndex(state.index);
+}
+
+for (const scenario of report.scenarios)
+{
+    const tab = element('button', scenario.title, tabs);
+    tab.type = 'button';
+    tab.setAttribute('role', 'tab');
+    tab.dataset.name = scenario.name;
+    tab.addEventListener('click', () => selectScenario(scenario));
+}
+
+// Ширина карточек меняется вместе с окном, поэтому графики перерисовываются под новую ширину.
+let knownWidth = 0;
+new ResizeObserver(() =>
+{
+    if (charts.clientWidth !== knownWidth)
+    {
+        knownWidth = charts.clientWidth;
+        drawAll();
+    }
+}).observe(charts);
+
+selectScenario(report.scenarios[0]);
+</script>
