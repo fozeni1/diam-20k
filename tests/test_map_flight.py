@@ -25,6 +25,8 @@ class MapFlightTests(unittest.TestCase):
         safe = DEMO_MAP.with_margin(3)
         for replay in (windy, calm):
             self.assertEqual(replay["status"], "Маршрут завершён")
+            np.testing.assert_allclose(replay["fuel_estimate"]["total_ml"], [200/3, 100])
+            self.assertIsNotNone(replay["relief"])
             self.assertEqual(replay["summary"]["passed"], 8)
             self.assertEqual(replay["summary"]["total"], 8)
             self.assertEqual(replay["summary"]["duration_s"], 200)

@@ -1,0 +1,7 @@
+{
+  "base_shaft_w": 100.0,
+  "transmission_efficiency": 0.8,
+  "shaft_w": [0, 100, 250, 500],
+  "flow_l_h": [0.08, 0.17, 0.36, 0.68],
+  "auxiliary_w": 18.0
+}

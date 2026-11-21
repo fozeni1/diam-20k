@@ -241,20 +241,22 @@ def wind(body=TEST_BODY, rotors_body_m=TEST_ROTORS_BODY_M, *, wind_ned_m_s=(0.0,
 SCENARIOS = {"free-fall": free_fall, "hover": hover, "climb": climb, "wind": wind}
 
 
-def run(scenario):
-    """Интегрирует сценарий методом RK4. Возвращает время (n,) и состояния (n, 13).
-
-    Число шагов округляется вверх: шаг не больше dt_s, сетка равномерная,
-    последняя точка приходится точно на конец сценария.
-    """
+def flight_states(scenario):
+    """Последовательность состояний одного расчёта. Потребитель может остановить полёт."""
     steps = max(1, ceil(scenario.duration_s / scenario.dt_s - 1e-9))
-    time_s = np.linspace(0.0, scenario.duration_s, steps + 1)
-    states = np.empty((steps + 1, 13))
-    states[0] = scenario.initial_state
-    for i in range(steps):
-        states[i + 1] = step_rk4(states[i], time_s[i], time_s[i + 1] - time_s[i], scenario.body,
-                                 scenario.loads, gravity_m_s2=GRAVITY_M_S2)
-    return time_s, states
+    grid = np.linspace(0.0, scenario.duration_s, steps + 1)
+    state = scenario.initial_state.copy()
+    yield grid[0], state
+    for start, end in zip(grid, grid[1:]):
+        state = step_rk4(state, start, end - start, scenario.body,
+                         scenario.loads, gravity_m_s2=GRAVITY_M_S2)
+        yield end, state
+
+
+def run(scenario):
+    """Время и состояния на сетке интегрирования, включая обе границы."""
+    times, states = zip(*flight_states(scenario))
+    return np.asarray(times), np.asarray(states)
 
 
 def deviation(scenario, time_s, states):

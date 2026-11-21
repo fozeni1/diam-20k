@@ -34,14 +34,21 @@ class Box:
         object.__setattr__(self, "minimum_ned", minimum)
         object.__setattr__(self, "maximum_ned", maximum)
 
+    def expanded(self, margins: PointNED) -> "Box":
+        return Box(tuple(v - d for v, d in zip(self.minimum_ned, margins)),
+                   tuple(v + d for v, d in zip(self.maximum_ned, margins)))
+
     def intersects_segment(self, start: PointNED, end: PointNED) -> bool:
+        return self.entry_fraction(start, end) is not None
+
+    def entry_fraction(self, start: PointNED, end: PointNED) -> float | None:
         # Для каждой оси сужаем интервал параметра t отрезка start + t * (end - start).
         first, last = 0.0, 1.0
         for origin, target, low, high in zip(start, end, self.minimum_ned, self.maximum_ned):
             direction = target - origin
             if direction == 0:
                 if origin < low or origin > high:
-                    return False
+                    return None
                 continue
 
             enter = (low - origin) / direction
@@ -49,8 +56,8 @@ class Box:
             first = max(first, min(enter, exit_))
             last = min(last, max(enter, exit_))
             if first > last:
-                return False
-        return True
+                return None
+        return first
 
 
 @dataclass(frozen=True)
@@ -65,12 +72,18 @@ class ObstacleMap:
         if not isfinite(metres) or metres < 0:
             raise ValueError("Запас должен быть конечным и неотрицательным")
 
-        def expand(box, delta):
-            return Box(tuple(v - delta for v in box.minimum_ned),
-                       tuple(v + delta for v in box.maximum_ned))
+        return ObstacleMap(self.bounds.expanded((-metres,) * 3),
+                           tuple(box.expanded((metres,) * 3) for box in self.obstacles))
 
-        return ObstacleMap(expand(self.bounds, -metres),
-                           tuple(expand(box, metres) for box in self.obstacles))
+    def envelope_free(self, start, end, extents):
+        """Свободен ли отрезок с заданными полуразмерами оболочки в NED."""
+        for p in (start, end):
+            for axis, half in enumerate(extents):
+                if (p[axis] - half <= self.bounds.minimum_ned[axis] or
+                        p[axis] + half >= self.bounds.maximum_ned[axis]):
+                    return False
+        return not any(box.expanded(extents).intersects_segment(start, end)
+                       for box in self.obstacles)
 
     def _inside_bounds(self, position: PointNED) -> bool:
         return all(

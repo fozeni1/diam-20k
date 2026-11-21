@@ -1,15 +1,7 @@
-"""Отчёт с графиками сценариев: один HTML-файл, который открывается без сервера и интернета.
-
-Разделение обязанностей намеренное. Вся физика остаётся здесь: модуль запускает
-сценарий, пересчитывает состояние в понятные величины (высота, скорости в осях
-NED, углы, силы) и подписывает каждый ряд. Шаблон scenario_report.html только
-рисует то, что получил, и ничего не знает о кватернионах и осях. Поэтому новый
-график добавляется одной записью в build_report, без правки JavaScript.
-
-Все графики построены на проверочном теле. Это не характеристики ДИАМ-20К.
-"""
+"""Графики движения проверочного тела и отклонений от аналитических решений."""
 
 import argparse
+from dataclasses import replace
 import json
 from importlib.resources import files
 from math import ceil
@@ -18,10 +10,10 @@ from pathlib import Path
 import numpy as np
 
 from .dynamics import rotation
+from .inertial_lab import bmi088_samples, displacement
 from .scenarios import SCENARIOS, run
 
-# Больше точек на графике шириной около 500 пикселей глаз не различит, а размер
-# файла растёт линейно. Расчёт при этом идёт с полным шагом сценария.
+# Прореживаем ряд только при подготовке графика. Ошибку считаем на полной записи.
 MAX_POINTS = 600
 
 # На логарифмической оси нельзя показать ноль. Отклонения меньше порога рисуются
@@ -93,8 +85,10 @@ def _tile(label, value, unit, *, number_format="fixed"):
     return {"label": label, "value": float(value), "unit": unit, "format": number_format}
 
 
-def build_report(scenario):
+def build_report(scenario, *, inertial=False, seed=42):
     """Запускает сценарий и возвращает данные его страницы: числа итогов и ряды графиков."""
+    if inertial:
+        scenario = replace(scenario, dt_s=0.005)
     full_time_s, states = run(scenario)
     picked = sample_indices(len(full_time_s))
     time_s, picked_states = full_time_s[picked], states[picked]
@@ -149,14 +143,39 @@ def build_report(scenario):
             note="Логарифмическая шкала. Значения ниже 10⁻¹⁶ показаны на этом уровне."))
         tiles.append(_tile("Наибольшее отклонение", gap.max(), "ед. СИ", number_format="power"))
 
+    if inertial:
+        orientation = rotation(states[0, 6:10])
+        velocity = orientation @ states[0, 3:6]
+        gyro = states[:, 10:13]
+        specific_force = np.array([scenario.loads(t, x)[0] / scenario.body.mass_kg
+                                   for t, x in zip(full_time_s, states)])
+        reference = states[:, :3] - states[0, :3]
+        # BMP390: пример влияния постоянной ошибки +50 Па при известном давлении у земли.
+        h_scale = 287.05 * 288.15 / 9.80665
+        pressure = 101325 * np.exp(-altitude_m / h_scale)
+        indicated = -h_scale * np.log((pressure + 50.0) / 101325)
+        charts.append(_chart("Высота по барометру", "м",
+                             [("Эталон", altitude_m), ("BMP390: смещение +50 Па", indicated)],
+                             note="Численный эксперимент при постоянной температуре 15 °C."))
+        curves = []
+        for label, rates, forces in [
+                ("Идеальная IMU", gyro, specific_force),
+                ("Профиль BMI088", *bmi088_samples(gyro, specific_force, np.random.default_rng(seed)))]:
+            estimate = displacement(full_time_s, rates, forces, orientation, velocity)
+            error = np.linalg.norm(estimate - reference, axis=1)
+            curves.append((label, error[picked]))
+            tiles.append(_tile(label + " · ошибка в конце", error[-1], "м"))
+        charts.append(_chart("Ошибка инерциального счисления", "м", curves, min_span=0.01,
+                             note=f"Начальные ориентация и скорость известны. Частота 200 Гц, seed={seed}."))
+
     return {"name": scenario.name, "title": scenario.title,
             "description": DESCRIPTIONS.get(scenario.name, ""),
             "time": _rounded(time_s), "tiles": tiles, "charts": charts}
 
 
-def render(scenarios):
+def render(scenarios, *, inertial=False, seed=42):
     """Возвращает готовый HTML: шаблон с подставленными данными всех сценариев."""
-    data = {"scenarios": [build_report(scenario) for scenario in scenarios]}
+    data = {"scenarios": [build_report(scenario, inertial=inertial, seed=seed) for scenario in scenarios]}
     # allow_nan=False превращает NaN или бесконечность в ошибку здесь, а не в пустой
     # график в браузере. Замена «</» не даёт строке данных закрыть тег script раньше времени.
     payload = json.dumps(data, ensure_ascii=False, allow_nan=False).replace("</", "<\\/")
@@ -172,12 +191,15 @@ def main(argv=None):
                         help="имена: " + ", ".join(SCENARIOS) + "; без имён строятся все")
     parser.add_argument("--output", type=Path, default=Path("scenario-report.html"),
                         help="куда записать отчёт; существующий файл заменяется")
+    parser.add_argument("--inertial", action="store_true", help="сравнить счисление по IMU с эталоном")
+    parser.add_argument("--seed", type=int, default=42, help="начальное значение генератора шума")
     args = parser.parse_args(argv)
     unknown = [name for name in args.names if name not in SCENARIOS]
     if unknown:
         parser.error("неизвестный сценарий: " + ", ".join(unknown))
     try:
-        html = render([SCENARIOS[name]() for name in args.names or SCENARIOS])
+        html = render([SCENARIOS[name]() for name in args.names or SCENARIOS],
+                      inertial=args.inertial, seed=args.seed)
         args.output.write_text(html, encoding="utf-8")
     except (ValueError, OSError) as error:
         parser.error(str(error))

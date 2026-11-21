@@ -4,52 +4,92 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ДИАМ‑20К · Полёт над картой</title>
 <style>
-  :root { color-scheme: dark; font: 16px system-ui, sans-serif; }
-  body { max-width: 1100px; margin: auto; padding: 24px; background: #0d151a; color: #e6f3f3; }
-  h1 { margin: 0 0 4px; font-size: 1.6rem; }
-  p { margin: 0 0 16px; color: #b0c7cb; }
-  canvas { display: block; width: 100%; height: clamp(340px, 59vh, 660px); border-radius: 10px; background: #111f26; }
-  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 12px 0; }
-  button { padding: 8px 14px; border: 1px solid #526c75; border-radius: 5px; background: #22363d; color: inherit; cursor: pointer; font: inherit; }
-  input { flex: 1 1 140px; accent-color: #57e0ba; }
-  output { font-variant-numeric: tabular-nums; min-width: 8ch; }
-  dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 8px; }
-  dl div { background: #16252c; border-radius: 6px; padding: 10px; }
-  dt { color: #b0c7cb; font-size: .83rem; }
-  dd { margin: 4px 0 0; font-variant-numeric: tabular-nums; }
-  details { margin: 14px 0; padding: 12px; border: 1px solid #526c75; border-radius: 6px; }
-  summary { cursor: pointer; font-weight: 600; }
-  details p { margin: 12px 0 0; }
+  :root { font: 15px "Helvetica Neue", Arial, sans-serif; color:#192c2a; background:#f5f3ed; }
+  * { box-sizing:border-box; }
+  body { max-width:1380px; padding:clamp(16px,3vw,44px); margin:auto; }
+  main { border-top:4px solid #164c44; }
+  header { padding:20px 0 16px; }
+  h1,h2,h3,p,dl { margin:0; }
+  h1 { font-size:clamp(27px,4vw,48px); font-weight:580; letter-spacing:-.045em; }
+  h2,summary { font-size:18px; font-weight:600; }
+  p { line-height:1.5; } #model { color:#52645b; margin-top:5px; }
+  .layout { display:grid; grid-template-columns:minmax(0,2.75fr) minmax(245px,1fr); gap:14px; }
+  .sheet, aside,details { background:#fffefa; border:1px solid #cbd2c7; border-radius:12px; }
+  .maptitle { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; gap:8px; flex-wrap:wrap; }
+  #map { width:100%; height:clamp(300px,46vh,560px); display:block; background:#23342f; }
+  #caption { font-size:12px; color:#4b5b52; padding:8px 16px; }
+  a { color:#086556; }
+  aside { padding:20px; display:flex; flex-direction:column; gap:10px; }
+  aside h2 { color:#175548; }
+  .number { font-size:clamp(32px,3.5vw,54px); letter-spacing:-.05em; line-height:1.05; }
+  .fuelDetail { color:#536359; font-size:14px; }
+  .divider { border-top:1px solid #d4dacf; padding-top:12px; margin-top:5px; }
+  #navPlot {width:100%;height:130px;display:block} #navLegend {font-size:13px;color:#415a50}
+  #profile { display:block; width:100%; height:70px; }
+  .controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:12px 16px; }
+  button,select { font:inherit; background:#fffefa; color:inherit; border:1px solid #adbcb1; border-radius:6px; padding:7px 11px; cursor:pointer; }
+  button:focus-visible,select:focus-visible,summary:focus-visible { outline:3px solid #d29a34; }
+  #play { background:#175548; color:white; min-width:78px; }
+  input { flex:1 1 100px; min-width:65px; accent-color:#175548; }
+  output,dd,#fuelTotal { font-variant-numeric:tabular-nums; }
+  dl { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:1px; background:#d9ded5; border:1px solid #d9ded5; border-radius:8px; overflow:hidden; }
+  dl div { padding:12px; background:#fffefa; } dt { font-size:12px; color:#55665a; } dd { margin:6px 0 0; font-size:16px; }
+  details { padding:16px; margin:14px 0; } summary { cursor:pointer; }
+  table {width:100%;border-collapse:collapse;margin-top:12px} th,td {padding:6px;text-align:left;border-bottom:1px solid #d4dacf} th {font-size:13px}
+  details dl,details button { margin-top:12px; } #outcome { margin-top:8px; }
+  #telemetryTitle { margin:20px 0 8px; }
+  [hidden] {display:none!important}
+  @media(max-width:730px){.layout{grid-template-columns:1fr} #map{height:320px} aside{gap:8px} }
 </style>
 <main>
-  <h1>ДИАМ‑20К · Полёт над картой</h1>
-  <p>Учебный сценарий 6‑DOF. Бирюзовым показан пройденный путь, янтарным — препятствия.</p>
+  <header><h1>ДИАМ‑20К · Разбор полёта</h1><p id="model"></p></header>
+  <div class="layout">
+  <section class="sheet">
+  <div class="maptitle"><h2>Карта маршрута</h2><button id="view" type="button" aria-pressed="true">Сменить проекцию</button></div>
   <canvas id="map" aria-label="Карта препятствий, траектория и положение аппарата"></canvas>
   <div class="controls">
     <button id="play" type="button">Пуск</button>
-    <button id="view" type="button" aria-pressed="false">Вид сверху</button>
+    <select id="speed" aria-label="Скорость воспроизведения"><option value="1">1×</option><option value="4">4×</option><option value="10">10×</option></select>
     <input id="seek" type="range" min="0" step="1" value="0" aria-label="Позиция воспроизведения">
     <output id="time" for="seek"></output>
   </div>
+  <p id="caption"></p></section>
+  <aside><h2>Топливо за полёт</h2><strong id="fuelTotal" class="number"></strong>
+  <p id="fuelMethod"></p><p id="fuelBasis" class="fuelDetail"></p>
+  <a id="fuelSource" href="https://www.os-engines.co.jp/english/line_up/engine/air/gas/manual/GF40_EG.pdf" target="_blank" rel="noopener" hidden>Пример из руководства GF40 ↗</a>
+  <p id="fuelNow" class="divider"></p>
+  <p id="tankNow" hidden></p>
+  <h2 class="divider">Высота над поверхностью</h2><output id="heightNow"></output>
+  <canvas id="profile" aria-label="Вертикальный зазор от центра до земли по времени"></canvas></aside></div>
   <details id="results">
     <summary>Итоги полёта</summary>
     <p id="outcome"></p>
     <dl id="metrics"></dl>
   </details>
-  <dl id="telemetry"></dl>
+  <details id="passDetails"><summary>Проход препятствий</summary>
+    <table><thead><tr><th>№</th><th>Проход</th><th>Зазор от центра до грани</th><th>Кадр выхода</th></tr></thead>
+    <tbody id="passRows"></tbody></table></details>
+  <h2 id="telemetryTitle">Телеметрия</h2><dl id="telemetry"></dl>
+  <details>
+    <summary>Приборы и инерциальное счисление в текущем кадре</summary>
+    <dl id="instruments"></dl>
+    <div id="navChart" hidden><h2 class="divider">Ошибка положения во времени</h2>
+    <p id="navLegend">Зелёная линия — ошибка смещения от последней отметки GNSS. Оранжевая — ошибка восстановления по двум отметкам. Затенён интервал потери GNSS.</p>
+    <canvas id="navPlot" aria-label="Ошибки смещения от отметки GNSS и послеполётного восстановления в метрах"></canvas></div>
+    <button id="download" type="button" hidden>Скачать ряды датчиков (JSON)</button>
+  </details>
 </main>
 <script>
 'use strict';
 const data = /* FLIGHT_DATA */;
 const canvas = document.querySelector('#map');
-const ctx = canvas.getContext('2d');
 const play = document.querySelector('#play');
 const view = document.querySelector('#view');
 const seek = document.querySelector('#seek');
 const time = document.querySelector('#time');
 const results = document.querySelector('#results');
 const telemetry = document.querySelector('#telemetry');
-const fields = ['Широта WGS 84', 'Долгота WGS 84', 'Высота над картой',
+const fields = ['Широта модели WGS 84', 'Долгота модели WGS 84', 'Высота относительно нуля карты',
   'Высота WGS 84', 'Горизонтальная скорость', 'Скорость набора', 'Курс корпуса', 'Тангаж', 'Крен', 'Боковой ветер', 'Пройдено препятствий на пути'];
 function metric(parent, label) {
   const group = document.createElement('div');
@@ -61,23 +101,123 @@ function metric(parent, label) {
   return value;
 }
 const cells = fields.map(label => metric(telemetry, label));
+const instruments = document.querySelector('#instruments');
+const instrumentCells = ['Гироскоп · рад/с', 'Акселерометр · м/с²', 'Магнитометр · мкТл',
+  'Барометр · Па', 'Скоростной напор · Па', 'GNSS · широта, долгота, высота (м)',
+  'GNSS · скорость NED, м/с', 'Дальномер вниз, м'].map(label => metric(instruments, label));
+document.querySelector('#model').textContent = data.scenario + ' · ' +
+  (data.test_body ? 'проверочное тело' : 'механические параметры из файла') + ', ' + data.mass_kg + ' кг · ' +
+  (data.hull_m ? 'оболочка ' + data.hull_m.join(' × ') + ' м' : 'проверка центра') + ' · запас 3 м';
+const download = document.querySelector('#download');
+download.hidden = Object.keys(data.sensor_series).length === 0;
+download.onclick = () => {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data.sensor_series)], {type:'application/json'}));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'sensors.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+const insPosition = data.summary.ins_final_error_m === undefined ? null :
+  metric(instruments, 'Смещение по ИНС от старта · N, E, D, м');
+const insError = insPosition ? metric(instruments, 'Ошибка положения ИНС, м') : null;
+const fixAge = insPosition ? metric(instruments, 'Возраст последней отметки GNSS, с') : null;
+const incrementError = insPosition ? metric(instruments, 'Ошибка смещения после этой отметки, м') : null;
+const reconError = insPosition ? metric(instruments, 'Ошибка восстановления по соседним отметкам GNSS, м') : null;
 const report = data.summary;
 const format = new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 2});
 document.querySelector('#outcome').textContent = data.status;
 const metrics = document.querySelector('#metrics');
+const estimate = data.fuel_estimate;
+function interval(values, digits=1) {
+  const show = n => n.toLocaleString('ru-RU', {maximumFractionDigits:digits});
+  return values[0] === values[1] ? show(values[0]) : show(values[0]) + '–' + show(values[1]);
+}
+const volume = report.fuel_used_l !== null;
+const logged = volume || report.fuel_used_kg !== null;
+const unit = volume || estimate ? ' мл' : ' г';
+const total = logged ? format.format(1000 * (volume ? report.fuel_used_l : report.fuel_used_kg)) + unit :
+  estimate ? interval(estimate.total_ml) + ' мл' : 'Нет журнала';
+const method = logged ? data.fuel_source : estimate ? 'Сценарная оценка' : 'Режим ДВС неизвестен';
+document.querySelector('#fuelTotal').textContent = total;
+document.querySelector('#fuelMethod').textContent = method;
+document.querySelector('#fuelBasis').textContent = estimate ?
+  'Работа ДВС весь интервал при ' + interval(estimate.rate_l_h) + ' л/ч. ' +
+  (estimate.source === 'gf40' ? 'Диапазон из примера базового двигателя.' : 'Расход задан пользователем.') :
+  report.drive ? 'Расход в каждой точке зависит от рассчитанной работы сил и моментов. Мощность установившегося хода ' + format.format(report.drive.base_shaft_w) + ' Вт задана в учебном профиле.' :
+  logged ? 'Интеграл расхода за сохранённую часть записи.' : 'Для учёта нужен журнал расхода или заданный режим.';
+document.querySelector('#fuelSource').hidden = estimate?.source !== 'gf40';
 for (const [label, value] of [
+  ['Топливо за интервал записи · ' + method, total],
   ['Время в полёте', format.format(report.duration_s) + ' с'],
   ['Длина траектории', format.format(report.distance_m) + ' м'],
-  ['Пройдено препятствий на пути', report.passed + ' из ' + report.total],
+  ['Пройдено препятствий на пути', data.goal ? report.passed + ' из ' + report.total : 'Маршрут не задан'],
   ['Минимальное расстояние от центра до препятствия по кадрам',
     report.closest_sample_m === null ? 'На карте нет препятствий' : format.format(report.closest_sample_m) + ' м'],
 ]) metric(metrics, label).textContent = value;
+
+metric(metrics, 'Наименьшая высота центра над землёй по кадрам').textContent = format.format(report.min_agl_m) + ' м';
+if (report.first_rejected_s !== null)
+  metric(metrics, 'Первый отклонённый шаг').textContent = format.format(report.first_rejected_s) + ' с';
+if (data.inventory) {
+  metric(metrics, 'Начальный запас топлива').textContent = format.format(data.inventory.initial_l) + ' л';
+  metric(metrics, 'Остаток к концу записи').textContent = interval(data.inventory.remaining_l, 3) + ' л';
+  if (data.inventory.shortfall_l[1] > 0)
+    metric(metrics, 'Нехватка топлива для заданного расчёта').textContent = interval(data.inventory.shortfall_l, 3) + ' л';
+}
+if (report.drive) {
+  metric(metrics, 'Пиковая потребная мощность учебного привода').textContent =
+    format.format(report.drive.peak_demand_w) + ' из ' + format.format(report.drive.max_shaft_w) + ' Вт';
+  metric(metrics, 'Дефицит энергии при ограничении мощности').textContent = format.format(report.drive.unserved_wh) + ' Вт·ч';
+  metric(metrics, 'Расчётное питание бортовой электроники').textContent = format.format(report.drive.auxiliary_wh) +
+    ' Вт·ч при ' + format.format(report.drive.auxiliary_w) + ' Вт';
+}
+if (report.battery) {
+  metric(metrics, 'Чистый расход энергии батареи').textContent =
+    format.format(report.battery.discharged_wh - report.battery.charged_wh) + ' Вт·ч';
+  metric(metrics, 'Батарея отдала').textContent = format.format(report.battery.discharged_wh) + ' Вт·ч';
+  metric(metrics, 'Батарея приняла').textContent = format.format(report.battery.charged_wh) + ' Вт·ч';
+}
+if (report.ins_final_error_m !== undefined)
+  metric(metrics, 'Ошибка ИНС к финишу · профиль BMI088').textContent = format.format(report.ins_final_error_m) + ' м';
+if (insPosition) {
+  metric(metrics, 'Спутниковых отметок получено').textContent = report.gnss_received + ' из ' + report.gnss_expected;
+  metric(metrics, 'Макс. ошибка послеполётного восстановления между отметками GNSS').textContent =
+    report.reconstruction_max_m === null ? 'Нет отметок' : format.format(report.reconstruction_max_m) + ' м';
+  if (data.gnss_outage)
+    metric(metrics, 'Период отключения GNSS').textContent = data.gnss_outage.join('–') + ' с';
+  metric(metrics, 'Наибольшая ошибка смещения от последней отметки').textContent =
+    report.ins_increment_max_m === null ? 'Нет исходной отметки' : format.format(report.ins_increment_max_m) + ' м';
+}
+const balance = report.work_balance;
+metric(metrics, 'Работа внешних сил и моментов без тяжести').textContent = format.format(balance.external_work_j) + ' Дж';
+metric(metrics, 'Изменение механической энергии').textContent = format.format(balance.energy_change_j) + ' Дж';
+metric(metrics, 'Максимальная невязка работы и энергии').textContent = balance.max_residual_j.toPrecision(3) + ' Дж';
+if (data.comparison) {
+  const c = data.comparison;
+  metric(metrics, 'Сравнение с журналом').textContent = c.count + ' отсч., ' + c.first_s + '–' + c.last_s + ' с';
+  metric(metrics, 'RMSE высоты, м').textContent = format.format(c.height_rmse_m);
+  metric(metrics, 'RMSE вектора скорости, м/с').textContent = format.format(c.velocity_vector_rmse_m_s);
+}
 
 const samples = data.samples;
 const last = samples.length - 1;
 const duration = samples[last].time;
 seek.max = last;
-let topView = false;
+let topView = true;
+const terrain = data.relief;
+const texture = new Image();
+const caption = document.querySelector('#caption');
+const mesh = data.terrain_grid;
+let background = null;
+if (terrain) {
+  caption.innerHTML = 'Юта, США · подложка рельефа. Полигон расчёта плоский, препятствия учебные. <a href="https://registry.opendata.aws/terrain-tiles/">Terrain Tiles / Mapzen</a> · USGS.';
+  if (mesh) caption.innerHTML = 'Юта · высоты относительно поверхности на старте. Дальномер и проверка зазора используют сетку с шагом 50 м. Коричневые объёмы — учебные препятствия. <a href="https://registry.opendata.aws/terrain-tiles/">Terrain Tiles / Mapzen</a> · USGS.';
+  texture.onload = () => { background = null; draw(); };
+  texture.src = terrain.image;
+} else if (mesh) {
+  caption.textContent = 'Учебный полигон · сетка высот 50 м. Вершины и склоны на карте задают поверхность для дальномера и проверки зазора.';
+} else caption.textContent = 'Для этих координат локальной подложки нет. Показана схема полигона.';
 let playing = false;
 let position = 0;
 let atEnd = false;
@@ -101,6 +241,7 @@ function draw() {
     canvas.width = Math.round(width * ratio);
     canvas.height = Math.round(height * ratio);
   }
+  let ctx = canvas.getContext('2d');
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   ctx.clearRect(0, 0, width, height);
 
@@ -131,42 +272,88 @@ function draw() {
     ctx.stroke();
   }
 
-  path(ground, '#607b81', '#192e36');
-  const [n0,e0] = data.bounds.minimum_ned;
-  const [n1,e1] = data.bounds.maximum_ned;
-  for (let n = Math.ceil(n0 / 100) * 100; n < n1; n += 100) {
-    path([[n,e0,0], [n,e1,0]], '#29454d');
-  }
-  for (let e = Math.ceil(e0 / 100) * 100; e < e1; e += 100) {
-    path([[n0,e,0], [n1,e,0]], '#29454d');
-  }
-  const obstacles = [...data.obstacles].sort((a, b) =>
-    plane(a.minimum_ned)[1] - plane(b.minimum_ned)[1]);
-  for (const box of obstacles) {
-    const base = footprint(box, 0), roof = footprint(box, box.minimum_ned[2]);
-    if (!topView) {
-      path([base[0], base[3], roof[3], roof[0]], '#ad8153', '#664528');
-      path([base[2], base[3], roof[3], roof[2]], '#ad8153', '#805631');
+  function drawMesh() {
+    const Z = mesh.heights, step = mesh.step;
+    const [n0,e0] = data.bounds.minimum_ned, [n1,e1] = data.bounds.maximum_ned;
+    function face(points) {
+      const light = Math.max(24, Math.min(74, 49 - points[0][2]*0.45 + (points[1][2]-points[0][2])*0.3
+                                                  + (points[2][2]-points[0][2])*0.25));
+      const tone = 'hsl(73,16%,' + light + '%)';
+      path(points, tone, tone, 0.65);
     }
-    path(roof, '#d69f60', '#aa7342');
-    const center = roof[0].map((value, i) => (value + roof[2][i]) / 2);
-    const [x, y] = project(center);
-    ctx.fillStyle = '#fff4de';
-    ctx.font = '12px system-ui';
-    ctx.textAlign = 'center';
-    const order = data.blockers.indexOf(data.obstacles.indexOf(box));
-    if (order >= 0) ctx.fillText(`№${order + 1} · ${-center[2]} м`, x, y + 4);
+    for (let i = Z.length-2; i >= 0; i--) {
+      const n = mesh.north0 + i*step;
+      if (n < n0 || n >= n1) continue;
+      for (let j=0; j<Z[i].length-1; j++) {
+        const e = mesh.east0 + j*step;
+        if (e < e0 || e >= e1) continue;
+        const a=[n,e,-Z[i][j]], b=[n+step,e,-Z[i+1][j]];
+        const c=[n,e+step,-Z[i][j+1]], d=[n+step,e+step,-Z[i+1][j+1]];
+        face([a,b,c]); face([d,c,b]);
+      }
+    }
   }
+
+  if (!background || background.width !== canvas.width || background.height !== canvas.height) {
+    background = document.createElement('canvas');
+    background.width = canvas.width;
+    background.height = canvas.height;
+    ctx = background.getContext('2d');
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    if (mesh && (!topView || !terrain)) {
+      drawMesh();
+    } else if (terrain && texture.complete && texture.naturalWidth) {
+      const [n,w] = terrain.nw, [s,e] = terrain.se;
+      const a = project([n,w,0]), b = project([n,e,0]), c = project([s,w,0]);
+      ctx.save();
+      ctx.transform(b[0]-a[0], b[1]-a[1], c[0]-a[0], c[1]-a[1], a[0], a[1]);
+      ctx.drawImage(texture,0,0,1,1);
+      ctx.restore();
+      path([...ground,ground[0]], '#364e43', null, 1.5);
+    } else path(ground, '#607b81', '#192e36');
+    const [n0,e0] = data.bounds.minimum_ned;
+    const [n1,e1] = data.bounds.maximum_ned;
+    if (!mesh || topView) {
+      for (let n = Math.ceil(n0 / 100) * 100; n < n1; n += 100) {
+        path([[n,e0,0], [n,e1,0]], 'rgba(99,114,103,.24)');
+      }
+      for (let e = Math.ceil(e0 / 100) * 100; e < e1; e += 100) {
+        path([[n0,e,0], [n1,e,0]], 'rgba(99,114,103,.24)');
+      }
+    }
+    const obstacles = [...data.obstacles].sort((a, b) =>
+      plane(a.minimum_ned)[1] - plane(b.minimum_ned)[1]);
+    for (const box of obstacles) {
+      const base = footprint(box, box.maximum_ned[2]), roof = footprint(box, box.minimum_ned[2]);
+      if (!topView) {
+        path([base[0], base[3], roof[3], roof[0]], '#ad8153', '#664528');
+        path([base[2], base[3], roof[3], roof[2]], '#ad8153', '#805631');
+      }
+      path(roof, '#783d25', '#ab6236');
+      const center = roof[0].map((value, i) => (value + roof[2][i]) / 2);
+      const [x, y] = project(center);
+      ctx.fillStyle = '#fff4de';
+      ctx.font = '12px system-ui';
+      ctx.textAlign = 'center';
+      const order = data.blockers.indexOf(data.obstacles.indexOf(box));
+      if (order >= 0) ctx.fillText(`№${order + 1} · ${-center[2]} м`, x, y + 4);
+    }
+
+    ctx = canvas.getContext('2d');
+  }
+  ctx.drawImage(background, 0, 0, width, height);
 
   const sample = samples[position];
-  path(samples.map(row => row.ned), '#6a8790', null, 2);
-  path(samples.slice(0, position + 1).map(row => row.ned), '#57e0ba', null, 3);
+  path(flightPath, '#244c43', null, 2);
+  path(flightPath.slice(0, position + 1), '#13d5ad', null, 3);
   const [north, east] = sample.ned;
-  path([[north,east,0], sample.ned], '#bed5db');
+  path([[north,east,-sample.ground_height_m], sample.ned], '#bed5db');
 
-  const [goalX, goalY] = project(data.goal);
-  ctx.strokeStyle = '#f3e8c7';
-  ctx.strokeRect(goalX - 4, goalY - 4, 8, 8);
+  if (data.goal) {
+    const [goalX, goalY] = project(data.goal);
+    ctx.strokeStyle = '#f3e8c7';
+    ctx.strokeRect(goalX - 4, goalY - 4, 8, 8);
+  }
   const modelSize = 11 / scale;
   const bodyPoint = point => sample.attitude.map((row, axis) =>
     sample.ned[axis] + modelSize * row.reduce((sum, component, col) =>
@@ -174,13 +361,13 @@ function draw() {
   const silhouette = [[1.3,0,0], [.25,.22,0], [-.38,1,0], [-.53,1,0],
     [-.28,.18,0], [-.86,.24,0], [-.86,-.24,0], [-.28,-.18,0],
     [-.53,-1,0], [-.38,-1,0], [.25,-.22,0]];
-  path(silhouette.map(bodyPoint), '#e8fff8', '#57e0ba', 1.5);
+  path(silhouette.map(bodyPoint), '#e8fff8', '#13d5ad', 1.5);
   path([[.8,0,0], [-.8,0,0]].map(bodyPoint), '#295751');
 
-  ctx.fillStyle = '#b4cbd1';
+  ctx.fillStyle = terrain ? '#172c26' : '#b4cbd1';
   ctx.textAlign = 'left';
   ctx.font = '12px system-ui';
-  ctx.fillText('Сетка · 100 м', 14, 21);
+  ctx.fillText(mesh && !topView ? 'Рельеф · 50 м' : 'Сетка · 100 м', 14, 21);
   const [x0, y0] = project([0,0,0]);
   const [xn, yn] = project([100,0,0]);
   const length = Math.hypot(xn - x0, yn - y0);
@@ -193,8 +380,83 @@ function draw() {
   ctx.fillText('С', width - 43 + dx, 39 + dy);
 }
 
+const profile = document.querySelector('#profile');
+const altitudes = samples.map(row => row.agl_m);
+const maxAlt = Math.max(1, altitudes.reduce((m,h) => Math.max(m,h), 0));
+const flightPath = samples.map(row => row.ned);
+function altitudeProfile() {
+  const w = profile.clientWidth || 240, h = 70;
+  profile.width = w; profile.height = h;
+  const pen = profile.getContext('2d');
+  const x = i => 3 + (w-6) * (duration ? samples[i].time / duration : 0);
+  const y = i => h-4 - (h-10) * altitudes[i]/maxAlt;
+  pen.beginPath(); pen.moveTo(x(0),y(0));
+  const stride = Math.max(1,Math.ceil(last/w));
+  for (let i=stride;i<last;i+=stride) pen.lineTo(x(i),y(i));
+  pen.lineTo(x(last),y(last)); pen.strokeStyle='#337366'; pen.lineWidth=2; pen.stroke();
+  pen.beginPath(); pen.arc(x(position),y(position),4,0,2*Math.PI); pen.fillStyle='#9f4b2c'; pen.fill();
+}
+const navChart = document.querySelector('#navChart');
+navChart.hidden = !insPosition;
+const navPlot = document.querySelector('#navPlot');
+if (!data.gnss_outage) document.querySelector('#navLegend').textContent =
+  'Зелёная линия — ошибка смещения от последней отметки GNSS. Оранжевая — ошибка восстановления по двум отметкам.';
+function navigationPlot() {
+  if (!insPosition || !navPlot.clientWidth) return;
+  const w = navPlot.clientWidth, h = 130, margin = 42;
+  navPlot.width=w; navPlot.height=h;
+  const pen=navPlot.getContext('2d');
+  const max=Math.max(.01,report.ins_increment_max_m || 0, report.reconstruction_max_m || 0);
+  const x=t=>margin+(w-margin-10)*t/(duration || 1);
+  const y=err=>h-23-(h-38)*err/max;
+  if (data.gnss_outage) {
+    const [a,b]=data.gnss_outage.map(t=>x(Math.min(t,duration)));
+    pen.fillStyle='#ede7d8'; pen.fillRect(a,10,b-a,h-33);
+  }
+  pen.font='12px system-ui'; pen.fillStyle='#415a50';
+  pen.fillText(format.format(max)+' м',0,15); pen.fillText('0 м',0,h-20);
+  pen.fillText('0 с',margin,h-4); pen.textAlign='right'; pen.fillText(format.format(duration)+' с',w-5,h-4);
+  for (const [key,color] of [['ins_increment_error_m','#207663'],['reconstruction_error_m','#bd642f']]) {
+    let active=false; pen.beginPath();
+    for (const row of samples) {
+      if (row[key] === null) { active=false; continue; }
+      if (active) pen.lineTo(x(row.time),y(row[key])); else pen.moveTo(x(row.time),y(row[key]));
+      active=true;
+    }
+    pen.strokeStyle=color; pen.lineWidth=2; pen.stroke();
+  }
+}
+navChart.closest('details').addEventListener('toggle',navigationPlot);
+new ResizeObserver(navigationPlot).observe(navChart);
 function update() {
   seek.value = position;
+  const row = samples[position];
+  document.querySelector('#heightNow').textContent = format.format(row.agl_m) + ' м';
+  document.querySelector('#fuelNow').textContent = logged ? 'К текущему кадру: ' +
+    format.format(1000*(volume ? row.fuel_used_l : row.fuel_used_kg)) + unit :
+    estimate ? 'Оценка к текущему кадру: ' + interval(estimate.rate_l_h.map(r => r*row.time/3.6)) + ' мл' : '';
+  if (report.drive) document.querySelector('#fuelNow').textContent +=
+    ' · ' + row.fuel_rate_l_h.toLocaleString('ru-RU', {maximumFractionDigits:3}) + ' л/ч';
+  if (data.inventory) {
+    const tank = document.querySelector('#tankNow');
+    tank.hidden = false;
+    tank.textContent = 'Остаток в баке · ' + interval(row.fuel_remaining_l, 3) + ' л';
+  }
+  altitudeProfile();
+  if (insPosition) {
+    insPosition.textContent = samples[position].ins_displacement_ned_m.map(v => v.toFixed(2)).join(' · ');
+    reconError.textContent = row.reconstruction_error_m === null ? 'За интервалом отметок' : row.reconstruction_error_m.toFixed(3);
+    fixAge.textContent = row.fix_age_s === null ? 'Нет отметки' : format.format(row.fix_age_s);
+    incrementError.textContent = row.ins_increment_error_m === null ? 'Нет отметки' : row.ins_increment_error_m.toFixed(3);
+    insError.textContent = samples[position].ins_error_m.toFixed(2);
+  }
+  const sensor = samples[position].sensors;
+  const channels = [sensor.gyro_rad_s, sensor.accel_m_s2, sensor.mag_ut, sensor.baro_pa,
+    sensor.dynamic_pressure_pa, sensor.gnss_deg_deg_m, sensor.gnss_velocity_ned_m_s, sensor.range_down_m];
+  channels.forEach((v, i) => {
+    instrumentCells[i].textContent = v === null ? (i === 7 ? 'Нет отражения в пределах 40 м' : i === 2 ? 'Поле не задано' : 'Нет спутниковой отметки') :
+      Array.isArray(v) ? v.map(x => x.toFixed(i === 5 ? 6 : 3)).join(' · ') : v.toFixed(2);
+  });
   const {geo: [lat, lon, height], ned, velocity: [vn, ve, vd], attitude, time: t} = samples[position];
   const degrees = angle => angle * 180 / Math.PI;
   const heading = (degrees(Math.atan2(attitude[1][0], attitude[0][0])) + 360) % 360;
@@ -205,7 +467,7 @@ function update() {
     `${(-vd).toFixed(1)} м/с`, ...[heading, pitch, roll].map(angle => `${angle.toFixed(1)}°`),
     samples[position].wind_east === 0 ? 'Штиль' :
       Math.abs(samples[position].wind_east).toFixed(1) + ' м/с на ' + (samples[position].wind_east > 0 ? 'восток' : 'запад'),
-    data.blockers.filter(i => ned[0] > data.obstacles[i].maximum_ned[0]).length + ' / ' + data.blockers.length];
+    data.goal ? data.blockers.filter(i => ned[0] > data.obstacles[i].maximum_ned[0]).length + ' / ' + data.blockers.length : 'Маршрут не задан'];
   cells.forEach((cell, i) => { cell.textContent = values[i]; });
   time.value = `${t.toFixed(1)} / ${duration.toFixed(1)} с`;
   if (position === last && !atEnd) results.open = true;
@@ -215,9 +477,11 @@ function update() {
 }
 
 let animation;
+const speed = document.querySelector('#speed');
+speed.addEventListener('change', () => { startedAt = performance.now() - samples[position].time * 1000 / Number(speed.value); });
 function frame(now) {
-  const elapsed = (now - startedAt) / 1000;
-  position = elapsed >= duration ? last : Math.floor(elapsed / samples[1].time);
+  const elapsed = (now - startedAt) * Number(speed.value) / 1000;
+  while (position < last && samples[position + 1].time <= elapsed) position++;
   update();
   if (position < last) animation = requestAnimationFrame(frame);
   else stop();
@@ -234,7 +498,7 @@ play.addEventListener('click', () => {
     return;
   }
   if (position === last) position = 0;
-  startedAt = performance.now() - samples[position].time * 1000;
+  startedAt = performance.now() - samples[position].time * 1000 / Number(speed.value);
   playing = true;
   play.textContent = 'Пауза';
   animation = requestAnimationFrame(frame);
@@ -246,10 +510,32 @@ seek.addEventListener('input', () => {
 });
 view.addEventListener('click', () => {
   topView = !topView;
+  background = null;
   view.setAttribute('aria-pressed', topView);
   draw();
 });
-new ResizeObserver(draw).observe(canvas);
+const passDetails = document.querySelector('#passDetails');
+passDetails.hidden = !data.passes.length;
+passDetails.querySelector('summary').textContent = 'Проход препятствий · ' + report.passed + ' из ' + report.total;
+for (const [i, pass] of data.passes.entries()) {
+  const tr = document.createElement('tr');
+  for (const text of [i+1, pass.direction, pass.face_gap_m === null ? '—' : format.format(pass.face_gap_m) + ' м']) {
+    const td = document.createElement('td');
+    td.textContent = text;
+    tr.append(td);
+  }
+  const td = document.createElement('td');
+  td.textContent = '—';
+  if (pass.exit_s !== null) {
+    const jump = document.createElement('button');
+    jump.textContent = format.format(pass.exit_s) + ' с';
+    jump.onclick = () => { stop(); position = samples.findIndex(row => row.time >= pass.exit_s); update(); };
+    td.replaceChildren(jump);
+  }
+  tr.append(td);
+  document.querySelector('#passRows').append(tr);
+}
+new ResizeObserver(() => {draw(); altitudeProfile();}).observe(canvas);
 update();
 </script>
 </html>
