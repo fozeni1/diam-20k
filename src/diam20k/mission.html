@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Полный цикл · Учебный стенд</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f3ed;color:#21352f;font:16px/1.5 system-ui,sans-serif}main{max-width:1100px;margin:auto;padding:clamp(16px,4vw,48px)}
+h1{font-size:clamp(28px,4vw,44px);line-height:1.1;letter-spacing:-.04em;margin:0 0 12px}h2{font-size:20px;margin:24px 0 8px}p{margin:8px 0 14px}
+section{background:#fffefa;border:1px solid #c6d0c6;border-radius:12px;padding:16px;margin:12px 0}label,dt,th{font-size:14px}button,select{font:inherit;padding:7px 10px;border-radius:6px;background:#fffefa;color:inherit;border:1px solid #9caea1}
+.controls{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.controls input{flex:1;min-width:140px;accent-color:#176153}#play{background:#176153;color:#fff}
+canvas{display:block;width:100%;height:190px}dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}dl div{border-top:1px solid #d8ded4;padding-top:8px}dd{margin:2px 0;font-variant-numeric:tabular-nums;font-weight:600}dt{color:#52665e}.scroll{overflow-x:auto}table{border-collapse:collapse;width:100%}th,td{padding:8px;text-align:left;border-bottom:1px solid #d8ded4}.hint{color:#52665e;font-size:14px}
+</style>
+<main>
+<h1>Полный цикл на учебном стенде</h1>
+<p>Четыре электрических мотора поднимают модель и опускают её на площадку. Один маршевый винт перемещает модель по горизонтальной направляющей. На развилке решение зависит от показаний двух датчиков занятости прохода.</p>
+<section><label for="choice">Условия опыта</label> <select id="choice"></select>
+<label for="view">Вид</label> <select id="view"><option value="top">Сверху</option><option value="side">Сбоку</option></select>
+<canvas id="track" aria-label="Схема направляющих, ворота и пройденный путь"></canvas>
+<div class="controls"><button id="play" type="button">Пуск</button><input id="seek" type="range" min="0" step="1" aria-label="Шаг расчёта"><output id="clock" for="seek"></output></div>
+<dl id="readings"></dl><p class="hint">На ползунке показано состояние к концу выбранного шага. Тяга и показания датчиков относятся к выполнению этого шага. На последней отметке приводы выключены.</p></section>
+<h2>Решения во время опыта</h2><p id="events"></p>
+<h2>Результаты всех прогонов</h2><div class="scroll"><table><thead><tr><th>Опыт</th><th>Итог</th><th>Горизонтальный путь, м</th><th>Топливо, мл</th><th>Энергия, Вт·ч</th></tr></thead><tbody id="summary"></tbody></table></div>
+<p class="hint">Повороты задаёт геометрия макета. Вертикальное движение ограничивают направляющие. Тяга и электрическая мощность относятся к проверочному телу массой 2 кг.</p>
+</main>
+<script>
+'use strict';
+const data = /* MISSION_DATA */;
+const $ = id => document.getElementById(id);
+const num = (value, digits=2) => value.toLocaleString('ru-RU',{maximumFractionDigits:digits});
+const phases = {takeoff:'Вертикальный взлёт',cruise:'Маршевый ход',landing:'Вертикальная посадка',main:'Выбрана прямая ветвь',side:'Выбран боковой проход',gate_main:'Закрылся основной проход',gate_both:'Закрылись обе ветви'};
+for (const [name,r] of Object.entries(data.runs)) {
+  $('choice').add(new Option(name,name));
+  const tr = $('summary').insertRow();
+  for (const text of [name,data.labels[r.stop],num(r.distance_m),num(r.case.fuel_ml-r.fuel_ml,3),num(r.case.battery_wh-r.battery_wh,3)]) tr.insertCell().textContent=text;
+}
+const cells = ['Этап','Высота, м','Подъёмные моторы 1–4, Н','Маршевый винт, Н','Топливо в баке, мл','Батарея, Вт·ч','Нижний дальномер, м','Ветви по датчикам'].map(label=>{
+  const box=document.createElement('div'), dt=document.createElement('dt'), dd=document.createElement('dd');
+  dt.textContent=label;box.append(dt,dd);$('readings').append(box);return dd;
+});
+let run, index=0, timer=null;
+function stop(){clearTimeout(timer);timer=null;$('play').textContent='Пуск';}
+function draw(point,t) {
+  const c=$('track'), w=c.clientWidth,h=c.clientHeight,ratio=window.devicePixelRatio||1;
+  c.width=Math.round(w*ratio);c.height=Math.round(h*ratio);
+  const g=c.getContext('2d');g.setTransform(ratio,0,0,ratio,0,0);
+  const side=$('view').value==='side', floor=h-24;
+  const xy=p=>[24+p[0]*(w-48)/data.stations.finish[0],side?floor+(p[2]??-data.height_m)*(h-80)/data.height_m:48+p[1]*(h-82)/data.stations.side[1]];
+  function line(points,color,width){
+    g.beginPath();points.forEach((p,i)=>{const [x,y]=xy(p);if(i)g.lineTo(x,y);else g.moveTo(x,y);});
+    g.strokeStyle=color;g.lineWidth=width;g.lineJoin='round';g.stroke();
+  }
+  const mark=data.stations;
+  if(side){
+    line([[...mark.start,0],[...mark.finish,0]],'#b5a68c',2);
+    line([[...mark.start,0],mark.start],'#afbdb0',4);
+    line([[...mark.finish,0],mark.finish],'#afbdb0',4);
+  }
+  line([mark.start,mark.finish],'#afbdb0',4);
+  line([mark.fork,mark.side,mark.across,mark.merge],'#afbdb0',4);
+  if(t>=run.case.close_at_s){
+    const count={open:0,main:1,both:2}[run.case.gates];
+    for(const gate of data.gates.slice(0,count)){const [x,y]=xy(gate.minimum_ned),[u,v]=xy(gate.maximum_ned);g.fillStyle='#bc6242';g.fillRect(x,y,u-x,v-y);}
+  }
+  line([[...mark.start,0],...run.steps.slice(0,index).map(s=>s.to_ned)],'#227264',3);
+  const [x,y]=xy(point);g.fillStyle='#143e35';g.beginPath();g.arc(x,y,6,0,2*Math.PI);g.fill();
+  g.font='13px system-ui';g.fillText('Старт',12,20);g.textAlign='right';g.fillText('Финиш',w-8,20);
+}
+function update() {
+  const final=index>run.steps.length, row=index ? run.steps[Math.min(index,run.steps.length)-1] : null;
+  const p=final?run.end_ned:row?.to_ned||[0,0,0], t=final?run.time_s:row?.end_s||0;
+  const signals=final?run.signals_at_stop:row?.signals, gate=v=>v?'свободна':'закрыта';
+  const lift=final?run.final_lift_n:row?.lift_n||[0,0,0,0];
+  const values=[final?data.labels[run.stop]:row?phases[row.phase]:'На старте',num(-p[2]),
+    lift.map(v=>num(v)).join(' / '),num(final?run.final_pusher_n:row?.pusher_n??0),
+    num(row?.fuel_ml??run.case.fuel_ml,3),num(row?.battery_wh??run.case.battery_wh,3),
+    signals?.range_m==null?'—':num(signals.range_m),signals?.main_clear==null?'Нет показания':'Прямая '+gate(signals.main_clear)+', боковая '+gate(signals.side_clear)];
+  values.forEach((v,i)=>cells[i].textContent=v);$('seek').value=index;$('clock').textContent=num(t)+' с';draw(p,t);
+}
+function choose(){stop();run=data.runs[$('choice').value];index=0;$('seek').max=run.steps.length+1;
+  $('events').textContent=[...run.events.map(([t,code])=>num(t)+' с · '+phases[code]),num(run.time_s)+' с · '+data.labels[run.stop]].join('  /  ');
+  if(run.stop==='no_lift') $('events').textContent+=' · тяга '+num(run.available_lift_n)+' Н при весе '+num(run.weight_n)+' Н';
+  update();}
+function advance(){if(index>run.steps.length){stop();return;}const duration=run.steps[index];
+  timer=setTimeout(()=>{index++;update();advance();},duration?1000*(duration.end_s-duration.start_s):0);}
+$('play').onclick=()=>{if(timer!==null){stop();return;}if(index>run.steps.length)index=0;update();$('play').textContent='Пауза';advance();};
+$('seek').oninput=()=>{stop();index=Number($('seek').value);update();};$('choice').onchange=choose;$('view').onchange=update;
+choose();new ResizeObserver(update).observe($('track'));
+</script></html>

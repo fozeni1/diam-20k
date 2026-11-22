@@ -13,4 +13,4 @@ dependencies = ["numpy>=1.26,<3"]
 where = ["src"]
 
 [tool.setuptools.package-data]
-diam20k = ["map_flight.html", "scenario_report.html", "utah-relief.jpg", "utah-grid.json"]
+diam20k = ["map_flight.html", "mission.html", "scenario_report.html", "utah-relief.jpg", "utah-grid.json"]

@@ -1,5 +1,6 @@
 """Послеполётные проверки по записи учебного сценария."""
 
+from dataclasses import dataclass
 import json
 from pathlib import Path
 
@@ -70,8 +71,22 @@ def obstacle_passes(samples, world, blockers):
     return passes
 
 
-def lab_drive(path, samples):
-    """Энергетический эквивалент учебного маршрута по положительной механической работе."""
+@dataclass(frozen=True)
+class DriveProfile:
+    base_w: float
+    efficiency: float
+    auxiliary_w: float
+    shaft_w: np.ndarray
+    flow_l_h: np.ndarray
+
+    def demand_at(self, mechanical_w):
+        return self.base_w + max(mechanical_w, 0.) / self.efficiency
+
+    def flow_at(self, power_w):
+        return np.interp(power_w, self.shaft_w, self.flow_l_h)
+
+
+def load_drive_profile(path):
     config = json.loads(Path(path).read_text(encoding="utf-8"))
     try:
         base, efficiency, auxiliary = [float(config[k]) for k in
@@ -86,26 +101,62 @@ def lab_drive(path, samples):
             not 0 <= base <= shaft[-1] or not 0 < efficiency <= 1 or auxiliary < 0):
         raise ValueError("Проверьте диапазоны мощности, расхода и КПД в профиле привода")
 
-    time = np.array([r["time"] for r in samples])
-    mechanical = np.array([r["external_power_w"] for r in samples])
-    # Между двумя кадрами мощность может пересечь несколько строк таблицы.
-    # Добавляем моменты пересечения, чтобы интеграл учёл каждый участок характеристики.
-    breaks = [time]
-    for level in np.r_[0., (shaft[shaft > base]-base)*efficiency]:
-        a, b = mechanical[:-1], mechanical[1:]
-        crosses = ((a < level) & (b > level)) | ((b < level) & (a > level))
-        breaks.append(time[:-1][crosses] + np.diff(time)[crosses]*(level-a[crosses])/(b[crosses]-a[crosses]))
-    grid = np.unique(np.concatenate(breaks))
-    demand = base + np.maximum(np.interp(grid, time, mechanical), 0)/efficiency
-    supplied = np.minimum(demand, shaft[-1])
-    rates = np.interp(supplied, shaft, flow)
-    dt = np.diff(grid)
-    litres = np.r_[0., np.cumsum(dt*(rates[1:]+rates[:-1])/7200)]
-    deficit = demand-supplied
-    missing_wh = np.sum(dt*(deficit[:-1]+deficit[1:])/7200)
-    for i, row in enumerate(samples):
-        j = np.searchsorted(grid, time[i])
-        row.update(shaft_demand_w=float(demand[j]), fuel_rate_l_h=float(rates[j]), fuel_used_l=float(litres[j]))
-    return {"base_shaft_w": base, "efficiency": efficiency, "max_shaft_w": float(shaft[-1]),
-            "peak_demand_w": float(demand.max()), "unserved_wh": float(missing_wh),
-            "auxiliary_w": auxiliary, "auxiliary_wh": float((time[-1]-time[0])*auxiliary/3600)}
+    return DriveProfile(base, efficiency, auxiliary, shaft, flow)
+
+
+class DriveMeter:
+    """Интеграл расхода и дефицита мощности по принятым шагам динамики."""
+
+    def __init__(self, profile):
+        self.profile = profile
+        self.thresholds = [0.] + [float((w-profile.base_w)*profile.efficiency)
+                                  for w in profile.shaft_w if w > profile.base_w]
+        self.last_time = None
+        self.first_time = None
+        self.last_power = 0.
+        self.used_l = self.missing_wh = self.peak_w = 0.
+
+    def _point(self, mechanical_w):
+        demand = self.profile.demand_at(mechanical_w)
+        supplied = min(demand, self.profile.shaft_w[-1])
+        return demand, demand-supplied, float(self.profile.flow_at(supplied))
+
+    def accept(self, time, mechanical_w, available_l=None):
+        # Между соседними отсчётами меняются наклон таблицы расхода и предел мощности.
+        first = self.last_power if self.last_time is not None else mechanical_w
+        dt = time-self.last_time if self.last_time is not None else 0.
+        if dt < 0:
+            raise ValueError("Время учёта привода должно возрастать")
+        cuts = sorted((w-first)/(mechanical_w-first) for w in self.thresholds
+                      if min(first, mechanical_w) < w < max(first, mechanical_w))
+        _, previous_deficit, previous_rate = self._point(first)
+        previous_u = litres = missing = 0.
+        for u in [*cuts, 1.]:
+            demand, deficit, rate = self._point(first + u*(mechanical_w-first))
+            seconds = dt*(u-previous_u)
+            litres += seconds*(rate+previous_rate)/7200
+            missing += seconds*(deficit+previous_deficit)/7200
+            previous_u, previous_deficit, previous_rate = u, deficit, rate
+        if available_l is not None and self.used_l+litres > available_l:
+            return None
+        if self.first_time is None:
+            self.first_time = time
+        self.used_l += litres
+        self.missing_wh += missing
+        self.peak_w = max(self.peak_w, demand)
+        self.last_time, self.last_power = time, mechanical_w
+        return {"shaft_demand_w": float(demand), "fuel_rate_l_h": rate, "fuel_used_l": float(self.used_l)}
+
+    def summary(self):
+        p = self.profile
+        return {"base_shaft_w": p.base_w, "efficiency": p.efficiency, "max_shaft_w": float(p.shaft_w[-1]),
+                "peak_demand_w": float(self.peak_w), "unserved_wh": float(self.missing_wh),
+                "auxiliary_w": p.auxiliary_w, "auxiliary_wh": float((self.last_time-self.first_time)*p.auxiliary_w/3600)}
+
+
+def lab_drive(path, samples):
+    """Расход по внешней записи механической мощности."""
+    meter = DriveMeter(load_drive_profile(path))
+    for row in samples:
+        row.update(meter.accept(row["time"], row["external_power_w"]))
+    return meter.summary()

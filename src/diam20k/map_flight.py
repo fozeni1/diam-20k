@@ -13,7 +13,7 @@ from .course import plan_course
 from .dynamics import rotation
 from .instruments import battery_energy, compare_recording, downward_range, fuel_usage, readings
 from .inertial_lab import audit_replay
-from .flight_audit import mechanical_sample, work_balance, fuel_inventory, obstacle_passes, lab_drive
+from .flight_audit import mechanical_sample, work_balance, fuel_inventory, obstacle_passes, DriveMeter, load_drive_profile
 from .parameters import load_body
 from .scenarios import GRAVITY_M_S2, SCENARIOS, TEST_BODY, Scenario, flight_states
 from .relief import terrain_layer, utah_surface, lab_surface
@@ -93,6 +93,9 @@ def simulate_demo(origin: MapOrigin = DEMO_ORIGIN, *, wind=True, name="route",
     if drive_profile is not None and (name != "route" or
             any(v is not None for v in (fuel_rate_l_h, fuel_log, engine_log))):
         raise ValueError("Профиль учебного привода применяется к маршруту как отдельный источник расхода")
+    if initial_fuel_l is not None and (not np.isfinite(initial_fuel_l) or initial_fuel_l < 0):
+        raise ValueError("Начальный объём топлива должен быть конечным и неотрицательным")
+    meter = None if drive_profile is None else DriveMeter(load_drive_profile(drive_profile))
     if fuel_rate_l_h is not None:
         if not np.isfinite(fuel_rate_l_h) or fuel_rate_l_h < 0:
             raise ValueError("Расход должен быть конечным и неотрицательным")
@@ -150,6 +153,7 @@ def simulate_demo(origin: MapOrigin = DEMO_ORIGIN, *, wind=True, name="route",
     series = {}
     held = {}
     stopped_at = None
+    rejected_demand_w = None
     extents = np.zeros(3)
     frame_stride = 1
     instrument_rates = instrument_rates or inertial_check
@@ -179,10 +183,29 @@ def simulate_demo(origin: MapOrigin = DEMO_ORIGIN, *, wind=True, name="route",
             stopped_at = time_s
             status = "Полёт прерван: препятствие или граница карты"
             break
+        force, moment = scenario.loads(time_s, state)
+        mechanics = mechanical_sample(state, body, force, moment)
+        if (fuel_rate_l_h is not None and initial_fuel_l is not None and
+                fuel_rate_l_h * time_s / 3600 > initial_fuel_l):
+            stopped_at = time_s
+            status = "Полёт прерван: топлива недостаточно для следующего шага"
+            break
+        if meter is not None:
+            required = meter.profile.demand_at(max(meter.last_power, mechanics["external_power_w"]))
+            if tick and required > meter.profile.shaft_w[-1]:
+                rejected_demand_w = required
+                stopped_at = time_s
+                status = "Полёт прерван: привод не обеспечивает потребную мощность"
+                break
+            charge = meter.accept(time_s, mechanics["external_power_w"], initial_fuel_l)
+            if charge is None:
+                stopped_at = time_s
+                status = "Полёт прерван: топлива недостаточно для следующего шага"
+                break
+            mechanics.update(charge)
         previous_rotation = attitude
         previous = state[:3]
         wind_ned = wind_at(time_s)
-        force, moment = scenario.loads(time_s, state)
         sensors = readings(state, force, body, origin, wind_ned, field_ned_ut)
         # Эталон для разбора берём до пропуска GNSS. В журнал прибора пропуск попадёт как null.
         geo, velocity = sensors["gnss_deg_deg_m"], sensors["gnss_velocity_ned_m_s"]
@@ -201,7 +224,7 @@ def simulate_demo(origin: MapOrigin = DEMO_ORIGIN, *, wind=True, name="route",
             "time": time_s, "ned": state[:3].tolist(), "attitude": attitude.tolist(),
             "wind_east": wind_ned[1], "geo": geo, "velocity": velocity, "sensors": sensors,
             "ground_height_m": ground_h, "agl_m": float(-state[2] - ground_h),
-            **mechanical_sample(state, body, force, moment),
+            **mechanics,
         }
         if tick % frame_stride == 0:
             samples.append(frame)
@@ -238,8 +261,9 @@ def simulate_demo(origin: MapOrigin = DEMO_ORIGIN, *, wind=True, name="route",
         summary["fuel_used_" + unit] = float(used[-1])
     if battery_log is not None:
         summary["battery"] = battery_energy(battery_log, samples[0]["time"], samples[-1]["time"])
-    if drive_profile is not None:
-        summary["drive"] = lab_drive(drive_profile, samples)
+    if meter is not None:
+        summary["drive"] = meter.summary()
+        summary["drive"]["rejected_demand_w"] = rejected_demand_w
         summary["fuel_used_l"] = samples[-1]["fuel_used_l"]
     estimate = None
     if drive_profile is None and fuel_log is None and engine_log is None and (name == "route" or fuel_rate_l_h is not None):

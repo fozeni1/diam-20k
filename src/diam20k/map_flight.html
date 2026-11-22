@@ -42,7 +42,8 @@
   @media(max-width:730px){.layout{grid-template-columns:1fr} #map{height:320px} aside{gap:8px} }
 </style>
 <main>
-  <header><h1>ДИАМ‑20К · Разбор полёта</h1><p id="model"></p></header>
+  <header><h1>ДИАМ‑20К · Разбор полёта</h1><p id="model"></p>
+    <p id="courseBasis" hidden>Курс выбран до старта. Управление использует состояние модели, а приборы записывают движение. <a id="cycleLink" href="mission.html" hidden>Взлёт, развилка по датчикам и посадка на стенде</a></p></header>
   <div class="layout">
   <section class="sheet">
   <div class="maptitle"><h2>Карта маршрута</h2><button id="view" type="button" aria-pressed="true">Сменить проекцию</button></div>
@@ -108,6 +109,8 @@ const instrumentCells = ['Гироскоп · рад/с', 'Акселероме�
 document.querySelector('#model').textContent = data.scenario + ' · ' +
   (data.test_body ? 'проверочное тело' : 'механические параметры из файла') + ', ' + data.mass_kg + ' кг · ' +
   (data.hull_m ? 'оболочка ' + data.hull_m.join(' × ') + ' м' : 'проверка центра') + ' · запас 3 м';
+document.querySelector('#courseBasis').hidden = !data.goal;
+document.querySelector('#cycleLink').hidden = !data.has_cycle_report;
 const download = document.querySelector('#download');
 download.hidden = Object.keys(data.sensor_series).length === 0;
 download.onclick = () => {
@@ -166,6 +169,8 @@ if (data.inventory) {
     metric(metrics, 'Нехватка топлива для заданного расчёта').textContent = interval(data.inventory.shortfall_l, 3) + ' л';
 }
 if (report.drive) {
+  if (report.drive.rejected_demand_w != null)
+    metric(metrics, 'Потребная мощность на отклонённом шаге').textContent = format.format(report.drive.rejected_demand_w) + ' Вт';
   metric(metrics, 'Пиковая потребная мощность учебного привода').textContent =
     format.format(report.drive.peak_demand_w) + ' из ' + format.format(report.drive.max_shaft_w) + ' Вт';
   metric(metrics, 'Дефицит энергии при ограничении мощности').textContent = format.format(report.drive.unserved_wh) + ' Вт·ч';
